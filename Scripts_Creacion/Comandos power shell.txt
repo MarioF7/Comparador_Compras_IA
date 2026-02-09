@@ -1,0 +1,26 @@
+"Set-ExecutionPolicy: Es la orden de cambiar las reglas de seguridad.
+"RemoteSigned: Es el nivel de permiso. Significa:
+"Los scripts que tú escribas en tu PC funcionarán sin problemas.
+"Los scripts que descargues de internet solo funcionarán si tienen una firma digital de un editor de confianza.
+"-Scope CurrentUser: Significa que el cambio solo se aplica a tu usuario de Windows, no a todo el sistema (así no necesitas ser administrador total para aplicarlo). "
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+----------------------------------------------------------------
+"Revertir cambio seguridad anterior"
+Set-ExecutionPolicy -ExecutionPolicy Restricted -Scope CurrentUser
+"Comprobar seguridad"
+Get-ExecutionPolicy -List
+--------------------------------------------------------------
+"Ir a carpeta"
+cd "C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion"
+"ejecutar crear_excel"
+.\crear_excel.ps1 
+"ejecutar crear_excel sin parar"
+.\crear_excel.ps1 -ProjectPath  "C:\Users\Alba\Desktop\Proyecto comparador IA\Comparador_Compras_IA" -Silent
+"Ejecutar cargar_datos con minimo de datos"
+.\cargar_datos.ps1 -Dataset Minimo
+"Ejecutar cargar_datos con maximo de datos"
+.\cargar_datos.ps1 -Dataset COMPLETO
+"Ejecutar configurar_sistema"
+.\configurar_sistema.ps1 -ProjectPath  "C:\Users\Alba\Desktop\Proyecto comparador IA\Comparador_Compras_IA"
+"Ejecutar agregar_macros"
+cscript.exe agregar_macros.vbs

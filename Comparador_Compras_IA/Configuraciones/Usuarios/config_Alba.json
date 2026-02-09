@@ -1,0 +1,28 @@
+﻿{
+    "Sesion":  {
+                   "IntentosFallidos":  0,
+                   "IP":  "192.168.0.18",
+                   "UltimoAcceso":  "2026-02-09 11:44:33"
+               },
+    "Preferencias":  {
+                         "UnidadPeso":  "kg",
+                         "Notificaciones":  true,
+                         "UnidadDistancia":  "km",
+                         "Tema":  "Claro",
+                         "AutoBackup":  true,
+                         "Moneda":  "EUR",
+                         "FormatoFecha":  "dd/MM/yyyy"
+                     },
+    "Usuario":  {
+                    "Nombre":  "Alba",
+                    "Telefono":  "",
+                    "CP":  "",
+                    "Coordenadas":  {
+                                        "Lat":  0,
+                                        "Lon":  0
+                                    },
+                    "Email":  "",
+                    "Ciudad":  "",
+                    "Direccion":  ""
+                }
+}

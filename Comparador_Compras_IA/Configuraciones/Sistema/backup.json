@@ -1,0 +1,25 @@
+﻿{
+    "Backup":  {
+                   "Manual":  {
+                                  "Comprimir":  true,
+                                  "Formato":  "ZIP",
+                                  "IncluirLogs":  true
+                              },
+                   "Destinos":  [
+                                    {
+                                        "Tipo":  "Local",
+                                        "Ruta":  "Data_Backup\\Automatico"
+                                    }
+                                ],
+                   "Automatico":  {
+                                      "Habilitado":  true,
+                                      "IntervaloHoras":  24,
+                                      "MaxBackups":  {
+                                                         "Anuales":  2,
+                                                         "Diarios":  7,
+                                                         "Semanales":  4,
+                                                         "Mensuales":  12
+                                                     }
+                                  }
+               }
+}

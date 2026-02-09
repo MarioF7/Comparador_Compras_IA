@@ -1,0 +1,21 @@
+﻿2026-02-09 11:44:24.006 [INFO] Iniciando carga de datos...
+2026-02-09 11:44:24.024 [INFO] Directorio del proyecto: C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion\..\Comparador_Compras_IA
+2026-02-09 11:44:24.028 [INFO] Dataset seleccionado: Completo
+2026-02-09 11:44:24.039 [SUCCESS] Directorio CSV creado: C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion\..\Comparador_Compras_IA\CSV_Ejemplo
+2026-02-09 11:44:24.060 [SUCCESS] Archivo Excel accesible: C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion\..\Comparador_Compras_IA\Comparador_Compras_IA_Completo.xlsm
+2026-02-09 11:44:24.064 [INFO] Intentando cargar datos directamente en Excel...
+2026-02-09 11:44:24.075 [INFO] Intentando cargar datos directamente en Excel...
+2026-02-09 11:44:25.743 [INFO] Abriendo archivo Excel: C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion\..\Comparador_Compras_IA\Comparador_Compras_IA_Completo.xlsm
+2026-02-09 11:44:26.327 [INFO] Cargando dataset completo...
+2026-02-09 11:44:26.334 [INFO] Cargando dataset completo de ejemplo...
+2026-02-09 11:44:26.724 [SUCCESS] Datos de usuarios generados: 4 registros
+2026-02-09 11:44:27.025 [SUCCESS] Datos de productos generados: 7 registros
+2026-02-09 11:44:27.355 [SUCCESS] Datos de tiendas generados: 6 registros
+2026-02-09 11:44:27.588 [SUCCESS] Datos de precios generados: 7 registros
+2026-02-09 11:44:27.678 [SUCCESS] Datos de comparativas generados: 2 registros
+2026-02-09 11:44:27.804 [SUCCESS] Datos de historial de compras generados: 2 registros
+2026-02-09 11:44:27.817 [ERROR] Error al generar datos de preferencias IA: El índice no es válido. (Excepción de HRESULT: 0x8002000B (DISP_E_BADINDEX))
+2026-02-09 11:44:27.821 [SUCCESS] Dataset completo cargado exitosamente
+2026-02-09 11:44:28.466 [SUCCESS] Datos guardados en Excel
+2026-02-09 11:44:28.718 [SUCCESS] Datos cargados exitosamente en Excel
+2026-02-09 11:44:28.723 [INFO] Resumen: 4 usuarios, 7 productos, 6 tiendas, 7 precios, 2 comparativas, 2 historiales, 2 preferencias

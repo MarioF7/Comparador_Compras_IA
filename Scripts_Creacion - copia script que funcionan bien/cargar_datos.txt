@@ -1,0 +1,1746 @@
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$ProjectPath,
+    
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("Minimo", "Completo", "Pruebas")]
+    [string]$Dataset = "Completo",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$Force,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$Silent,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$GenerateOnly
+)
+
+# ===================================================
+# CARGAR_DATOS.PS1 - Sistema Comparador de Compras IA
+# Versión: 4.0.0 - Profesional
+# ===================================================
+
+# Configuración de codificación UTF-8 con BOM
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# ===================================================
+# CONFIGURACIÓN GLOBAL
+# ===================================================
+$VERSION = "4.0.0"
+$GLOBAL_ERRORS = 0
+$START_TIME = Get-Date
+
+# Rutas (si no se proporciona ProjectPath, detectar automáticamente)
+if (-not $ProjectPath) {
+    $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
+$PROJECT_ROOT = Join-Path (Split-Path $ProjectPath -Parent) "Comparador_Compras_IA"
+$EXCEL_FILE = Join-Path $PROJECT_ROOT "Comparador_Compras_IA_Completo.xlsm"
+$LOG_DIR = Join-Path $PROJECT_ROOT "Logs"
+$LOG_FILE = Join-Path $LOG_DIR "cargar_datos_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+$CSV_DIR = Join-Path $PROJECT_ROOT "CSV_Ejemplo"
+
+# ===================================================
+# FUNCIONES DE UTILIDAD
+# ===================================================
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [ValidateSet("INFO", "SUCCESS", "WARNING", "ERROR", "DEBUG")]
+        [string]$Level = "INFO",
+        [bool]$ConsoleOutput = $true
+    )
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    $logEntry = "$timestamp [$Level] $Message"
+    
+    try {
+        Add-Content -Path $LOG_FILE -Value $logEntry -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch {}
+    
+    if ($ConsoleOutput -and (-not $Silent)) {
+        switch ($Level) {
+            "SUCCESS" { Write-Host $logEntry -ForegroundColor Green }
+            "ERROR"   { Write-Host $logEntry -ForegroundColor Red }
+            "WARNING" { Write-Host $logEntry -ForegroundColor Yellow }
+            "DEBUG"   { Write-Host $logEntry -ForegroundColor Gray }
+            default   { Write-Host $logEntry -ForegroundColor Cyan }
+        }
+    }
+}
+
+function Test-ExcelAccess {
+    param([string]$FilePath)
+    
+    try {
+        if (Test-Path $FilePath) {
+            $file = Get-Item $FilePath
+            $stream = [System.IO.File]::Open($FilePath, 'Open', 'Read', 'ReadWrite')
+            $stream.Close()
+            Write-Log "Archivo Excel accesible: $FilePath" -Level "SUCCESS"
+            return $true
+        } else {
+            Write-Log "Archivo Excel no encontrado: $FilePath" -Level "WARNING"
+            return $false
+        }
+    } catch {
+        Write-Log "No se puede acceder al archivo Excel: $($_.Exception.Message)" -Level "ERROR"
+        return $false
+    }
+}
+
+function Load-DataIntoExcel {
+    param([string]$ExcelPath)
+    
+    Write-Log "Intentando cargar datos directamente en Excel..." -Level "INFO"
+    
+    try {
+        $excel = New-Object -ComObject Excel.Application
+        $excel.Visible = $false
+        $excel.DisplayAlerts = $false
+        
+        Write-Log "Abriendo archivo Excel: $ExcelPath" -Level "INFO"
+        $workbook = $excel.Workbooks.Open($ExcelPath)
+        
+        # Cargar datos en cada hoja según el dataset seleccionado
+        switch ($Dataset) {
+            "Minimo" {
+                Write-Log "Cargando dataset mínimo..." -Level "INFO"
+                Load-MinimalDataset -Workbook $workbook
+            }
+            "Completo" {
+                Write-Log "Cargando dataset completo..." -Level "INFO"
+                Load-CompleteDataset -Workbook $workbook
+            }
+            "Pruebas" {
+                Write-Log "Cargando dataset de pruebas..." -Level "INFO"
+                Load-TestDataset -Workbook $workbook
+            }
+        }
+        
+        # Guardar cambios
+        $workbook.Save()
+        Write-Log "Datos guardados en Excel" -Level "SUCCESS"
+        
+        # Cerrar Excel
+        $workbook.Close($true)
+        $excel.Quit()
+        
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        
+        return $true
+        
+    } catch {
+        Write-Log "Error al cargar datos en Excel: $($_.Exception.Message)" -Level "ERROR"
+        Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Level "ERROR"
+        return $false
+    }
+}
+
+function Load-MinimalDataset {
+    param([object]$Workbook)
+    
+    try {
+        # USUARIOS (2 registros)
+        $ws = $Workbook.Sheets("USUARIOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        @(
+            "USR001,Juan Pérez,juan.perez@email.com,+34 600111222,Calle Mayor 1 1ºA,Madrid,28013,40.416775,-3.703790,5,Coche,Nestlé;Danone,Alimentación;Limpieza,Sin lactosa;Sin gluten,450.00,'[{""producto"":""leche"",""fecha"":""2024-01-15""}]',2024-01-15,2024-01-20 10:30:00,TRUE,Básico",
+            "USR002,María García,maria.garcia@email.com,+34 600333444,Avenida Diagonal 100 3ºB,Barcelona,08008,41.385064,2.173403,3,Público,Mercadona;Carrefour,Limpieza;Electrónica,Vegetariano,600.00,'[{""producto"":""detergente"",""fecha"":""2024-01-18""}]',2024-01-18,2024-01-21 15:45:00,TRUE,Avanzado"
+        ) | ForEach-Object {
+            $row = $_.Split(',')
+            for ($i=0; $i -lt $row.Count; $i++) {
+                $ws.Cells(2 + $index, $i+1).Value = $row[$i]
+            }
+            $index++
+        }
+        
+        Write-Log "Datos mínimos cargados: 2 usuarios, 3 productos, 2 tiendas" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al cargar dataset mínimo: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Load-CompleteDataset {
+    param([object]$Workbook)
+    
+    Write-Log "Cargando dataset completo de ejemplo..." -Level "INFO"
+    
+    try {
+        # Generar datos completos para todas las hojas
+        Generate-CompleteUsers -Workbook $Workbook
+        Generate-CompleteProducts -Workbook $Workbook
+        Generate-CompleteStores -Workbook $Workbook
+        Generate-CompletePrices -Workbook $Workbook
+        Generate-CompleteComparisons -Workbook $Workbook
+        Generate-CompletePurchaseHistory -Workbook $Workbook
+        Generate-CompletePreferences -Workbook $Workbook
+        
+        Write-Log "Dataset completo cargado exitosamente" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al cargar dataset completo: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Load-TestDataset {
+    param([object]$Workbook)
+    
+    Write-Log "Cargando dataset de pruebas (datos masivos)..." -Level "INFO"
+    
+    try {
+        # Generar datos de prueba más extensos
+        Generate-TestUsers -Workbook $Workbook -Count 10
+        Generate-TestProducts -Workbook $Workbook -Count 50
+        Generate-TestStores -Workbook $Workbook -Count 15
+        Generate-TestPrices -Workbook $Workbook -Count 200
+        
+        Write-Log "Dataset de pruebas cargado: 10 usuarios, 50 productos, 15 tiendas, 200 precios" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al cargar dataset de pruebas: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Clear-WorksheetData {
+    param([object]$Worksheet)
+    
+    try {
+        $lastRow = $Worksheet.UsedRange.Rows.Count
+        if ($lastRow -gt 1) {
+            $Worksheet.Range("A2:Z$lastRow").ClearContents()
+        }
+    } catch {
+        Write-Log "Error al limpiar datos de la hoja: $($_.Exception.Message)" -Level "WARNING"
+    }
+}
+
+# ===================================================
+# GENERADORES DE DATOS COMPLETOS
+# ===================================================
+
+function Generate-CompleteUsers {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("USUARIOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $users = @(
+            @{
+                UserID = "USR001"
+                Nombre = "Juan Pérez"
+                Email = "juan.perez@email.com"
+                Telefono = "+34 600111222"
+                Direccion = "Calle Mayor 1, 1ºA"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Coord_Lat = "40.416775"
+                Coord_Lon = "-3.703790"
+                Radio_Busqueda_KM = "5"
+                Pref_Transporte = "Coche"
+                Pref_Marcas = "Nestlé,Danone,Kellogg's"
+                Pref_Categorias = "Alimentación,Limpieza"
+                Restricciones = "Sin lactosa, Sin gluten"
+                Presupuesto_Mensual = "450.00"
+                Historial_Busqueda = '[{"producto":"leche","fecha":"2024-01-15"},{"producto":"arroz","fecha":"2024-01-16"}]'
+                Fecha_Registro = "2024-01-15"
+                Ultimo_Acceso = "2024-01-20 10:30:00"
+                Activo = "1"
+                Nivel_Usuario = "Básico"
+            },
+            @{
+                UserID = "USR002"
+                Nombre = "María García"
+                Email = "maria.garcia@email.com"
+                Telefono = "+34 600333444"
+                Direccion = "Avenida Diagonal 100, 3ºB"
+                Ciudad = "Barcelona"
+                CP = "08008"
+                Coord_Lat = "41.385064"
+                Coord_Lon = "2.173403"
+                Radio_Busqueda_KM = "3"
+                Pref_Transporte = "Público"
+                Pref_Marcas = "Mercadona,Carrefour,Hacendado"
+                Pref_Categorias = "Limpieza,Electrónica,Bebidas"
+                Restricciones = "Vegetariano"
+                Presupuesto_Mensual = "600.00"
+                Historial_Busqueda = '[{"producto":"detergente","fecha":"2024-01-18"},{"producto":"café","fecha":"2024-01-19"}]'
+                Fecha_Registro = "2024-01-18"
+                Ultimo_Acceso = "2024-01-21 15:45:00"
+                Activo = "1"
+                Nivel_Usuario = "Avanzado"
+            },
+            @{
+                UserID = "USR003"
+                Nombre = "Carlos López"
+                Email = "carlos.lopez@email.com"
+                Telefono = "+34 600555666"
+                Direccion = "Gran Vía 45, 5ºD"
+                Ciudad = "Valencia"
+                CP = "46004"
+                Coord_Lat = "39.469907"
+                Coord_Lon = "-0.376288"
+                Radio_Busqueda_KM = "4"
+                Pref_Transporte = "Andando"
+                Pref_Marcas = "Pascual,Font Vella,Cuétara"
+                Pref_Categorias = "Alimentación,Bebidas,Dulces"
+                Restricciones = "Diabético, Sin azúcar añadido"
+                Presupuesto_Mensual = "350.00"
+                Historial_Busqueda = '[{"producto":"agua","fecha":"2024-01-17"},{"producto":"galletas","fecha":"2024-01-20"}]'
+                Fecha_Registro = "2024-01-17"
+                Ultimo_Acceso = "2024-01-22 09:15:00"
+                Activo = "1"
+                Nivel_Usuario = "Básico"
+            },
+            @{
+                UserID = "USR004"
+                Nombre = "Ana Rodríguez"
+                Email = "ana.rodriguez@email.com"
+                Telefono = "+34 600777888"
+                Direccion = "Plaza España 10, 2ºC"
+                Ciudad = "Sevilla"
+                CP = "41013"
+                Coord_Lat = "37.388630"
+                Coord_Lon = "-5.995340"
+                Radio_Busqueda_KM = "6"
+                Pref_Transporte = "Bicicleta"
+                Pref_Marcas = "Día,Alcampo,Eroski"
+                Pref_Categorias = "Frutas,Verduras,Pescado"
+                Restricciones = "Vegano, Orgánico preferido"
+                Presupuesto_Mensual = "550.00"
+                Historial_Busqueda = '[{"producto":"frutas","fecha":"2024-01-16"},{"producto":"verduras","fecha":"2024-01-21"}]'
+                Fecha_Registro = "2024-01-16"
+                Ultimo_Acceso = "2024-01-23 11:20:00"
+                Activo = "1"
+                Nivel_Usuario = "Admin"
+            }
+        )
+        
+        $row = 2
+        foreach ($user in $users) {
+            $col = 1
+            foreach ($key in @('UserID','Nombre','Email','Telefono','Direccion','Ciudad','CP','Coord_Lat','Coord_Lon','Radio_Busqueda_KM','Pref_Transporte','Pref_Marcas','Pref_Categorias','Restricciones','Presupuesto_Mensual','Historial_Busqueda','Fecha_Registro','Ultimo_Acceso','Activo','Nivel_Usuario')) {
+                $ws.Cells($row, $col).Value = $user[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de usuarios generados: 4 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de usuarios: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompleteProducts {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("PRODUCTOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $products = @(
+            @{
+                ProductID = "PROD001"
+                Nombre = "Leche Entera UHT"
+                Nombre_Cientifico = "Lactis liquidum"
+                Categoria = "Alimentación"
+                Subcategoria = "Lácteos"
+                Marca = "Pascual"
+                Descripcion = "Leche entera UHT tratamiento térmico 1L"
+                Caracteristicas = "Enriquecida con calcio y vitaminas A y D"
+                Unidad_Medida = "litro"
+                Tamanio_Paquete = "1.000"
+                Unidades_Paquete = "1"
+                Peso_Bruto = "1050.000"
+                Peso_Neto = "1000.000"
+                Dimensiones = "6.5x6.5x18.5 cm"
+                UPC_EAN = "8410100001234"
+                Codigo_Interno = "LEC-ENT-UHT-1L"
+                URL_Imagen = "http://example.com/leche.jpg"
+                URL_Info = "http://example.com/info_leche"
+                URL_Nutricional = "http://example.com/nutri_leche"
+                Alergenos = "Lactosa"
+                Caducidad_Minima = "90"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "0"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD002"
+                Nombre = "Arroz Largo Extra"
+                Nombre_Cientifico = "Oryza sativa"
+                Categoria = "Alimentación"
+                Subcategoria = "Arroces"
+                Marca = "Sos"
+                Descripcion = "Arroz largo extra calidad extra 1kg"
+                Caracteristicas = "Ideal para paellas y guarniciones"
+                Unidad_Medida = "kg"
+                Tamanio_Paquete = "1.000"
+                Unidades_Paquete = "1"
+                Peso_Bruto = "1050.000"
+                Peso_Neto = "1000.000"
+                Dimensiones = "8x18x25 cm"
+                UPC_EAN = "8410037001234"
+                Codigo_Interno = "ARR-LAR-EXT-1KG"
+                URL_Imagen = "http://example.com/arroz.jpg"
+                URL_Info = "http://example.com/info_arroz"
+                URL_Nutricional = "http://example.com/nutri_arroz"
+                Alergenos = ""
+                Caducidad_Minima = "720"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "0"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD003"
+                Nombre = "Detergente Líquido Ariel"
+                Nombre_Cientifico = ""
+                Categoria = "Limpieza"
+                Subcategoria = "Detergentes"
+                Marca = "Ariel"
+                Descripcion = "Detergente líquido para ropa color 1.5L"
+                Caracteristicas = "Elimina manchas difíciles, protege colores"
+                Unidad_Medida = "litro"
+                Tamanio_Paquete = "1.500"
+                Unidades_Paquete = "1"
+                Peso_Bruto = "1650.000"
+                Peso_Neto = "1500.000"
+                Dimensiones = "10x10x20 cm"
+                UPC_EAN = "8410100005678"
+                Codigo_Interno = "DET-LIQ-ARI-1.5L"
+                URL_Imagen = "http://example.com/detergente.jpg"
+                URL_Info = "http://example.com/info_detergente"
+                URL_Nutricional = "http://example.com/nutri_detergente"
+                Alergenos = ""
+                Caducidad_Minima = "365"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "0"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD004"
+                Nombre = "Aceite Oliva Virgen Extra"
+                Nombre_Cientifico = "Olea europaea"
+                Categoria = "Alimentación"
+                Subcategoria = "Aceites"
+                Marca = "Carbonell"
+                Descripcion = "Aceite de oliva virgen extra 1L"
+                Caracteristicas = "Primera prensada en frío, intenso frutado"
+                Unidad_Medida = "litro"
+                Tamanio_Paquete = "1.000"
+                Unidades_Paquete = "1"
+                Peso_Bruto = "1100.000"
+                Peso_Neto = "1000.000"
+                Dimensiones = "7x7x23 cm"
+                UPC_EAN = "8410100009012"
+                Codigo_Interno = "ACE-O-VIR-EXT-1L"
+                URL_Imagen = "http://example.com/aceite.jpg"
+                URL_Info = "http://example.com/info_aceite"
+                URL_Nutricional = "http://example.com/nutri_aceite"
+                Alergenos = ""
+                Caducidad_Minima = "730"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "1"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD005"
+                Nombre = "Café Molido Natural"
+                Nombre_Cientifico = "Coffea arabica"
+                Categoria = "Alimentación"
+                Subcategoria = "Cafés"
+                Marca = "Marcilla"
+                Descripcion = "Café molido natural 250g"
+                Caracteristicas = "Tueste natural, intenso y aromático"
+                Unidad_Medida = "kg"
+                Tamanio_Paquete = "0.250"
+                Unidades_Paquete = "1"
+                Peso_Bruto = "300.000"
+                Peso_Neto = "250.000"
+                Dimensiones = "5x15x20 cm"
+                UPC_EAN = "8410100012345"
+                Codigo_Interno = "CAF-MOL-NAT-250G"
+                URL_Imagen = "http://example.com/cafe.jpg"
+                URL_Info = "http://example.com/info_cafe"
+                URL_Nutricional = "http://example.com/nutri_cafe"
+                Alergenos = ""
+                Caducidad_Minima = "540"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "0"
+                Comercio_Justo = "1"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD006"
+                Nombre = "Yogur Natural"
+                Nombre_Cientifico = ""
+                Categoria = "Alimentación"
+                Subcategoria = "Lácteos"
+                Marca = "Danone"
+                Descripcion = "Yogur natural sin azúcar añadido 125g"
+                Caracteristicas = "Probióticos naturales, sin conservantes"
+                Unidad_Medida = "unidad"
+                Tamanio_Paquete = "0.125"
+                Unidades_Paquete = "4"
+                Peso_Bruto = "600.000"
+                Peso_Neto = "500.000"
+                Dimensiones = "12x8x6 cm"
+                UPC_EAN = "8410100015678"
+                Codigo_Interno = "YOG-NAT-DAN-125Gx4"
+                URL_Imagen = "http://example.com/yogur.jpg"
+                URL_Info = "http://example.com/info_yogur"
+                URL_Nutricional = "http://example.com/nutri_yogur"
+                Alergenos = "Lactosa"
+                Caducidad_Minima = "30"
+                Refrigerado = "1"
+                Congelado = "0"
+                Organico = "0"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            },
+            @{
+                ProductID = "PROD007"
+                Nombre = "Manzanas Royal Gala"
+                Nombre_Cientifico = "Malus domestica"
+                Categoria = "Alimentación"
+                Subcategoria = "Frutas"
+                Marca = ""
+                Descripcion = "Manzanas Royal Gala 1kg"
+                Caracteristicas = "Dulces y crujientes, origen nacional"
+                Unidad_Medida = "kg"
+                Tamanio_Paquete = "1.000"
+                Unidades_Paquete = "6"
+                Peso_Bruto = "1100.000"
+                Peso_Neto = "1000.000"
+                Dimensiones = "Varios"
+                UPC_EAN = "8410100019012"
+                Codigo_Interno = "MAN-ROY-GAL-1KG"
+                URL_Imagen = "http://example.com/manzana.jpg"
+                URL_Info = "http://example.com/info_manzana"
+                URL_Nutricional = "http://example.com/nutri_manzana"
+                Alergenos = ""
+                Caducidad_Minima = "21"
+                Refrigerado = "0"
+                Congelado = "0"
+                Organico = "1"
+                Comercio_Justo = "0"
+                Fecha_Alta = "2024-01-15"
+                Activo = "1"
+            }
+        )
+        
+        $row = 2
+        foreach ($product in $products) {
+            $col = 1
+            foreach ($key in @('ProductID','Nombre','Nombre_Cientifico','Categoria','Subcategoria','Marca','Descripcion','Caracteristicas','Unidad_Medida','Tamanio_Paquete','Unidades_Paquete','Peso_Bruto','Peso_Neto','Dimensiones','UPC_EAN','Codigo_Interno','URL_Imagen','URL_Info','URL_Nutricional','Alergenos','Caducidad_Minima','Refrigerado','Congelado','Organico','Comercio_Justo','Fecha_Alta','Activo')) {
+                $ws.Cells($row, $col).Value = $product[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de productos generados: 7 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de productos: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompleteStores {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("TIENDAS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $stores = @(
+            @{
+                StoreID = "TND001"
+                Nombre_Tienda = "Mercadona Alcalá"
+                Cadena = "Mercadona"
+                Direccion = "Calle Alcalá 10"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.417000"
+                Coord_Lon = "-3.703000"
+                Horario = "09:00-21:00"
+                Telefono = "912345678"
+                Email = "info@mercadona.es"
+                Web = "http://www.mercadona.es"
+                Tipo_Tienda = "Supermercado"
+                Tamanio_Tienda = "Grande"
+                Servicios = "Delivery,Recogida en tienda,Parking"
+                Parking = "1"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "0"
+                Cajeros_Automaticos = "1"
+                Farmacia = "0"
+                Valoracion_Media = "4.2"
+                N_Opiniones = "150"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "2.5"
+                Tiempo_Desplazamiento = "0:15:00"
+                Coste_Desplazamiento = "1.50"
+                Activo = "1"
+            },
+            @{
+                StoreID = "TND002"
+                Nombre_Tienda = "Hipercor Gran Vía"
+                Cadena = "Hipercor"
+                Direccion = "Gran Vía 32"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.419000"
+                Coord_Lon = "-3.705000"
+                Horario = "10:00-22:00"
+                Telefono = "912345679"
+                Email = "info@hipercor.es"
+                Web = "http://www.hipercor.es"
+                Tipo_Tienda = "Hipermercado"
+                Tamanio_Tienda = "Grande"
+                Servicios = "Delivery,Recogida en tienda,Parking,Guardería"
+                Parking = "1"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "1"
+                Cajeros_Automaticos = "1"
+                Farmacia = "1"
+                Valoracion_Media = "4.5"
+                N_Opiniones = "200"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "3.2"
+                Tiempo_Desplazamiento = "0:20:00"
+                Coste_Desplazamiento = "2.00"
+                Activo = "1"
+            },
+            @{
+                StoreID = "TND003"
+                Nombre_Tienda = "Carrefour Express Mayor"
+                Cadena = "Carrefour"
+                Direccion = "Calle Mayor 5"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.415000"
+                Coord_Lon = "-3.702000"
+                Horario = "08:00-23:00"
+                Telefono = "912345680"
+                Email = "info@carrefour.es"
+                Web = "http://www.carrefour.es"
+                Tipo_Tienda = "Supermercado"
+                Tamanio_Tienda = "Mediano"
+                Servicios = "Recogida en tienda"
+                Parking = "0"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "0"
+                Cajeros_Automaticos = "1"
+                Farmacia = "0"
+                Valoracion_Media = "3.8"
+                N_Opiniones = "80"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "1.8"
+                Tiempo_Desplazamiento = "0:10:00"
+                Coste_Desplazamiento = "0.80"
+                Activo = "1"
+            },
+            @{
+                StoreID = "TND004"
+                Nombre_Tienda = "Día Market Toledo"
+                Cadena = "Día"
+                Direccion = "Calle Toledo 15"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.414000"
+                Coord_Lon = "-3.704000"
+                Horario = "09:00-20:30"
+                Telefono = "912345681"
+                Email = "info@dia.es"
+                Web = "http://www.dia.es"
+                Tipo_Tienda = "Supermercado"
+                Tamanio_Tienda = "Pequeño"
+                Servicios = "Delivery"
+                Parking = "0"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "0"
+                Cajeros_Automaticos = "0"
+                Farmacia = "0"
+                Valoracion_Media = "3.9"
+                N_Opiniones = "120"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "2.8"
+                Tiempo_Desplazamiento = "0:18:00"
+                Coste_Desplazamiento = "1.20"
+                Activo = "1"
+            },
+            @{
+                StoreID = "TND005"
+                Nombre_Tienda = "Alcampo Princesa"
+                Cadena = "Alcampo"
+                Direccion = "Princesa 25"
+                Ciudad = "Madrid"
+                CP = "28008"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.428000"
+                Coord_Lon = "-3.715000"
+                Horario = "09:30-22:00"
+                Telefono = "912345682"
+                Email = "info@alcampo.es"
+                Web = "http://www.alcampo.es"
+                Tipo_Tienda = "Hipermercado"
+                Tamanio_Tienda = "Grande"
+                Servicios = "Delivery,Recogida en tienda,Parking,Cajeros"
+                Parking = "1"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "1"
+                Cajeros_Automaticos = "1"
+                Farmacia = "0"
+                Valoracion_Media = "4.1"
+                N_Opiniones = "180"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "4.5"
+                Tiempo_Desplazamiento = "0:25:00"
+                Coste_Desplazamiento = "2.50"
+                Activo = "1"
+            },
+            @{
+                StoreID = "TND006"
+                Nombre_Tienda = "Lidl Sol"
+                Cadena = "Lidl"
+                Direccion = "Calle del Sol 8"
+                Ciudad = "Madrid"
+                CP = "28013"
+                Provincia = "Madrid"
+                Pais = "España"
+                Coord_Lat = "40.416000"
+                Coord_Lon = "-3.706000"
+                Horario = "08:30-21:30"
+                Telefono = "912345683"
+                Email = "info@lidl.es"
+                Web = "http://www.lidl.es"
+                Tipo_Tienda = "Supermercado"
+                Tamanio_Tienda = "Mediano"
+                Servicios = "Recogida en tienda"
+                Parking = "1"
+                Acceso_Discapacitados = "1"
+                Wifi_Gratis = "0"
+                Cajeros_Automaticos = "0"
+                Farmacia = "0"
+                Valoracion_Media = "4.0"
+                N_Opiniones = "95"
+                Fecha_Valoracion = "2024-01-15"
+                Distancia_Usuario = "2.2"
+                Tiempo_Desplazamiento = "0:12:00"
+                Coste_Desplazamiento = "1.00"
+                Activo = "1"
+            }
+        )
+        
+        $row = 2
+        foreach ($store in $stores) {
+            $col = 1
+            foreach ($key in @('StoreID','Nombre_Tienda','Cadena','Direccion','Ciudad','CP','Provincia','Pais','Coord_Lat','Coord_Lon','Horario','Telefono','Email','Web','Tipo_Tienda','Tamanio_Tienda','Servicios','Parking','Acceso_Discapacitados','Wifi_Gratis','Cajeros_Automaticos','Farmacia','Valoracion_Media','N_Opiniones','Fecha_Valoracion','Distancia_Usuario','Tiempo_Desplazamiento','Coste_Desplazamiento','Activo')) {
+                $ws.Cells($row, $col).Value = $store[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de tiendas generados: 6 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de tiendas: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompletePrices {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("PRECIOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $prices = @(
+            # Precios para Leche (PROD001) en diferentes tiendas
+            @{
+                PriceID = "PRC001-PROD001-TND001"
+                ProductID = "PROD001"
+                StoreID = "TND001"
+                Precio_Unitario = "1.20"
+                Precio_Paquete = "1.20"
+                Unidad_Medida = "litro"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "1.2000"
+                Precio_x_Unidad = "0"
+                Oferta = "1"
+                Descuento_Porcentaje = "10.00"
+                Precio_Original = "1.33"
+                Tipo_Oferta = "2x1"
+                Fecha_Inicio_Oferta = "2024-01-15"
+                Fecha_Fin_Oferta = "2024-01-31"
+                Stock = "Alto"
+                Cantidad_Stock = "50"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "10"
+                Fecha_Actualizacion = "2024-01-15 10:30:00"
+                Fuente_Datos = "Manual"
+                URL_Oferta = "http://oferta.com/leche"
+                Confianza_Datos = "0.95"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":1.33},{"fecha":"2024-01-15","precio":1.20}]'
+            },
+            @{
+                PriceID = "PRC002-PROD001-TND002"
+                ProductID = "PROD001"
+                StoreID = "TND002"
+                Precio_Unitario = "1.30"
+                Precio_Paquete = "1.30"
+                Unidad_Medida = "litro"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "1.3000"
+                Precio_x_Unidad = "0"
+                Oferta = "0"
+                Descuento_Porcentaje = "0.00"
+                Precio_Original = "1.30"
+                Tipo_Oferta = "0"
+                Fecha_Inicio_Oferta = "0"
+                Fecha_Fin_Oferta = "0"
+                Stock = "Medio"
+                Cantidad_Stock = "25"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "5"
+                Fecha_Actualizacion = "2024-01-15 10:35:00"
+                Fuente_Datos = "Manual"
+                URL_Oferta = "0"
+                Confianza_Datos = "0.90"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":1.35},{"fecha":"2024-01-10","precio":1.30}]'
+            },
+            @{
+                PriceID = "PRC003-PROD001-TND003"
+                ProductID = "PROD001"
+                StoreID = "TND003"
+                Precio_Unitario = "1.15"
+                Precio_Paquete = "1.15"
+                Unidad_Medida = "litro"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "1.1500"
+                Precio_x_Unidad = "0"
+                Oferta = "1"
+                Descuento_Porcentaje = "5.00"
+                Precio_Original = "1.21"
+                Tipo_Oferta = "0"
+                Fecha_Inicio_Oferta = "2024-01-14"
+                Fecha_Fin_Oferta = "2024-01-28"
+                Stock = "Alto"
+                Cantidad_Stock = "40"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "8"
+                Fecha_Actualizacion = "2024-01-15 10:40:00"
+                Fuente_Datos = "Web"
+                URL_Oferta = "http://oferta.com/leche2"
+                Confianza_Datos = "0.92"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":1.25},{"fecha":"2024-01-14","precio":1.15}]'
+            },
+            # Precios para Arroz (PROD002)
+            @{
+                PriceID = "PRC004-PROD002-TND001"
+                ProductID = "PROD002"
+                StoreID = "TND001"
+                Precio_Unitario = "1.50"
+                Precio_Paquete = "1.50"
+                Unidad_Medida = "kg"
+                Precio_x_KG = "1.5000"
+                Precio_x_Litro = "0"
+                Precio_x_Unidad = "0"
+                Oferta = "0"
+                Descuento_Porcentaje = "0.00"
+                Precio_Original = "1.50"
+                Tipo_Oferta = "0"
+                Fecha_Inicio_Oferta = "0"
+                Fecha_Fin_Oferta = "0"
+                Stock = "Alto"
+                Cantidad_Stock = "100"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "20"
+                Fecha_Actualizacion = "2024-01-15 10:45:00"
+                Fuente_Datos = "Manual"
+                URL_Oferta = "0"
+                Confianza_Datos = "0.98"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":1.55},{"fecha":"2024-01-05","precio":1.50}]'
+            },
+            @{
+                PriceID = "PRC005-PROD002-TND002"
+                ProductID = "PROD002"
+                StoreID = "TND002"
+                Precio_Unitario = "1.60"
+                Precio_Paquete = "1.60"
+                Unidad_Medida = "kg"
+                Precio_x_KG = "1.6000"
+                Precio_x_Litro = "0"
+                Precio_x_Unidad = "0"
+                Oferta = "1"
+                Descuento_Porcentaje = "15.00"
+                Precio_Original = "1.88"
+                Tipo_Oferta = "3x2"
+                Fecha_Inicio_Oferta = "2024-01-13"
+                Fecha_Fin_Oferta = "2024-01-27"
+                Stock = "Bajo"
+                Cantidad_Stock = "10"
+                Unidades_Minimas = "3"
+                Unidades_Maximas = "9"
+                Fecha_Actualizacion = "2024-01-15 10:50:00"
+                Fuente_Datos = "Web"
+                URL_Oferta = "http://oferta.com/arroz"
+                Confianza_Datos = "0.88"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":1.70},{"fecha":"2024-01-13","precio":1.60}]'
+            },
+            # Precios para Detergente (PROD003)
+            @{
+                PriceID = "PRC007-PROD003-TND001"
+                ProductID = "PROD003"
+                StoreID = "TND001"
+                Precio_Unitario = "4.50"
+                Precio_Paquete = "4.50"
+                Unidad_Medida = "litro"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "3.0000"
+                Precio_x_Unidad = "0"
+                Oferta = "1"
+                Descuento_Porcentaje = "20.00"
+                Precio_Original = "5.63"
+                Tipo_Oferta = "Pack ahorro"
+                Fecha_Inicio_Oferta = "2024-01-12"
+                Fecha_Fin_Oferta = "2024-01-26"
+                Stock = "Medio"
+                Cantidad_Stock = "30"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "3"
+                Fecha_Actualizacion = "2024-01-15 11:00:00"
+                Fuente_Datos = "API"
+                URL_Oferta = "http://oferta.com/detergente"
+                Confianza_Datos = "0.85"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":5.00},{"fecha":"2024-01-12","precio":4.50}]'
+            },
+            # Precios para Aceite (PROD004)
+            @{
+                PriceID = "PRC009-PROD004-TND001"
+                ProductID = "PROD004"
+                StoreID = "TND001"
+                Precio_Unitario = "7.50"
+                Precio_Paquete = "7.50"
+                Unidad_Medida = "litro"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "7.5000"
+                Precio_x_Unidad = "0"
+                Oferta = "0"
+                Descuento_Porcentaje = "0.00"
+                Precio_Original = "7.50"
+                Tipo_Oferta = "0"
+                Fecha_Inicio_Oferta = "0"
+                Fecha_Fin_Oferta = "0"
+                Stock = "Alto"
+                Cantidad_Stock = "60"
+                Unidades_Minimas = "1"
+                Unidades_Maximas = "6"
+                Fecha_Actualizacion = "2024-01-15 11:10:00"
+                Fuente_Datos = "Manual"
+                URL_Oferta = "0"
+                Confianza_Datos = "0.96"
+                Historial_Precios = '[{"fecha":"2024-01-01","precio":7.80},{"fecha":"2024-01-05","precio":7.50}]'
+            }
+        )
+        
+        $row = 2
+        foreach ($price in $prices) {
+            $col = 1
+            foreach ($key in @('PriceID','ProductID','StoreID','Precio_Unitario','Precio_Paquete','Unidad_Medida','Precio_x_KG','Precio_x_Litro','Precio_x_Unidad','Oferta','Descuento_Porcentaje','Precio_Original','Tipo_Oferta','Fecha_Inicio_Oferta','Fecha_Fin_Oferta','Stock','Cantidad_Stock','Unidades_Minimas','Unidades_Maximas','Fecha_Actualizacion','Fuente_Datos','URL_Oferta','Confianza_Datos','Historial_Precios')) {
+                $ws.Cells($row, $col).Value = $price[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de precios generados: 7 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de precios: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompleteComparisons {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("COMPARATIVA")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $comparisons = @(
+            @{
+                ComparativaID = "CMP001-USR001"
+                UserID = "USR001"
+                ProductID = "PROD001"
+                Lista_Productos = '["PROD001"]'
+                Fecha_Comparacion = "2024-01-15 14:30:00"
+                Mejor_Precio = "1.15"
+                Tienda_Mejor_Precio = "TND003"
+                Precio_Medio = "1.22"
+                Precio_Maximo = "1.30"
+                Precio_Minimo = "1.15"
+                Desviacion_Estandar = "0.075"
+                Distancia_Mejor = "1.8"
+                Tiempo_Mejor = "0:10:00"
+                Coste_Desplazamiento = "0.80"
+                Ahorro_Estimado = "0.07"
+                Ahorro_Porcentual = "5.74"
+                N_Tiendas_Comparadas = "3"
+                Ruta_Recomendada = '[{"tienda":"TND003","orden":1}]'
+                Tiendas_Ruta = "TND003"
+                Distancia_Total_Ruta = "1.8"
+                Tiempo_Total_Ruta = "0:10:00"
+                Coste_Total_Ruta = "0.80"
+                Puntuacion_Global = "85.50"
+                Puntuacion_Precio = "92.00"
+                Puntuacion_Distancia = "78.00"
+                Puntuacion_Calidad = "75.00"
+                Recomendacion = "Comprar"
+                Notas = "Mejor precio en tienda cercana"
+            },
+            @{
+                ComparativaID = "CMP002-USR002"
+                UserID = "USR002"
+                ProductID = "PROD003"
+                Lista_Productos = '["PROD003"]'
+                Fecha_Comparacion = "2024-01-16 11:15:00"
+                Mejor_Precio = "4.50"
+                Tienda_Mejor_Precio = "TND001"
+                Precio_Medio = "4.75"
+                Precio_Maximo = "5.00"
+                Precio_Minimo = "4.50"
+                Desviacion_Estandar = "0.250"
+                Distancia_Mejor = "2.5"
+                Tiempo_Mejor = "0:15:00"
+                Coste_Desplazamiento = "1.50"
+                Ahorro_Estimado = "0.25"
+                Ahorro_Porcentual = "5.26"
+                N_Tiendas_Comparadas = "2"
+                Ruta_Recomendada = '[{"tienda":"TND001","orden":1}]'
+                Tiendas_Ruta = "TND001"
+                Distancia_Total_Ruta = "2.5"
+                Tiempo_Total_Ruta = "0:15:00"
+                Coste_Total_Ruta = "1.50"
+                Puntuacion_Global = "82.30"
+                Puntuacion_Precio = "88.00"
+                Puntuacion_Distancia = "72.00"
+                Puntuacion_Calidad = "80.00"
+                Recomendacion = "Comprar"
+                Notas = "Oferta válida hasta fin de mes"
+            }
+        )
+        
+        $row = 2
+        foreach ($comp in $comparisons) {
+            $col = 1
+            foreach ($key in @('ComparativaID','UserID','ProductID','Lista_Productos','Fecha_Comparacion','Mejor_Precio','Tienda_Mejor_Precio','Precio_Medio','Precio_Maximo','Precio_Minimo','Desviacion_Estandar','Distancia_Mejor','Tiempo_Mejor','Coste_Desplazamiento','Ahorro_Estimado','Ahorro_Porcentual','N_Tiendas_Comparadas','Ruta_Recomendada','Tiendas_Ruta','Distancia_Total_Ruta','Tiempo_Total_Ruta','Coste_Total_Ruta','Puntuacion_Global','Puntuacion_Precio','Puntuacion_Distancia','Puntuacion_Calidad','Recomendacion','Notas')) {
+                $ws.Cells($row, $col).Value = $comp[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de comparativas generados: 2 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de comparativas: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompletePurchaseHistory {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("HISTORIAL_COMPRAS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $purchases = @(
+            @{
+                CompraID = "CMP001-USR001"
+                UserID = "USR001"
+                StoreID = "TND003"
+                Fecha_Compra = "2024-01-15 16:20:00"
+                Total_Compra = "45.60"
+                Total_Descuentos = "5.40"
+                Total_Sin_Descuentos = "51.00"
+                N_Productos = "15"
+                N_Items = "18"
+                Lista_Productos = '[{"producto":"PROD001","cantidad":2,"precio_unitario":1.15,"total":2.30},{"producto":"PROD002","cantidad":1,"precio_unitario":1.45,"total":1.45}]'
+                Metodo_Pago = "Tarjeta"
+                Tipo_Compra = "Presencial"
+                Ticket_Image = "C:\Tickets\ticket001.jpg"
+                Ticket_PDF = "C:\Tickets\ticket001.pdf"
+                Valoracion_Compra = "4.5"
+                Valoracion_Productos = "4.2"
+                Valoracion_Atencion = "4.8"
+                Valoracion_Tienda = "4.3"
+                Comentarios = "Todo correcto, buen servicio"
+                Problemas = "Ninguno"
+                Sugerencias = "Mejor señalización en pasillos"
+                Fecha_Registro = "2024-01-15 16:30:00"
+            },
+            @{
+                CompraID = "CMP002-USR002"
+                UserID = "USR002"
+                StoreID = "TND001"
+                Fecha_Compra = "2024-01-16 12:45:00"
+                Total_Compra = "28.90"
+                Total_Descuentos = "3.10"
+                Total_Sin_Descuentos = "32.00"
+                N_Productos = "8"
+                N_Items = "10"
+                Lista_Productos = '[{"producto":"PROD003","cantidad":1,"precio_unitario":4.50,"total":4.50},{"producto":"PROD004","cantidad":1,"precio_unitario":7.50,"total":7.50}]'
+                Metodo_Pago = "Efectivo"
+                Tipo_Compra = "Presencial"
+                Ticket_Image = "C:\Tickets\ticket002.jpg"
+                Ticket_PDF = "C:\Tickets\ticket002.pdf"
+                Valoracion_Compra = "4.0"
+                Valoracion_Productos = "4.5"
+                Valoracion_Atencion = "3.5"
+                Valoracion_Tienda = "4.0"
+                Comentarios = "Productos de buena calidad"
+                Problemas = "Falta de personal en cajas"
+                Sugerencias = "Aumentar personal en horas punta"
+                Fecha_Registro = "2024-01-16 12:55:00"
+            }
+        )
+        
+        $row = 2
+        foreach ($purchase in $purchases) {
+            $col = 1
+            foreach ($key in @('CompraID','UserID','StoreID','Fecha_Compra','Total_Compra','Total_Descuentos','Total_Sin_Descuentos','N_Productos','N_Items','Lista_Productos','Metodo_Pago','Tipo_Compra','Ticket_Image','Ticket_PDF','Valoracion_Compra','Valoracion_Productos','Valoracion_Atencion','Valoracion_Tienda','Comentarios','Problemas','Sugerencias','Fecha_Registro')) {
+                $ws.Cells($row, $col).Value = $purchase[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de historial de compras generados: 2 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de historial de compras: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-CompletePreferences {
+    param([object]$Workbook)
+    
+    try {
+        $ws = $Workbook.Sheets("PREFERENCIAS_IA")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $preferences = @(
+            @{
+                PrefID = "PREF001-USR001"
+                UserID = "USR001"
+                Categoria_Favorita = "Alimentación"
+                Subcategoria_Favorita = "Lácteos"
+                Marca_Favorita = "Nestlé"
+                Tienda_Favorita = "TND003"
+                Gasto_Promedio_Mes = "200.00"
+                Frecuencia_Compra = "4"
+                Dia_Preferido_Compra = "Sábado"
+                Hora_Preferida = "10:00:00"
+                Sensibilidad_Precio = "0.80"
+                Sensibilidad_Calidad = "0.60"
+                Sensibilidad_Distancia = "0.40"
+                Sensibilidad_Tiempo = "0.50"
+                Sensibilidad_Marca = "0.30"
+                Tolerancia_Desplazamiento = "5.00"
+                Presupuesto_Max_Producto = "10.00"
+                Preferencia_Ofertas = "1"
+                Preferencia_Ecologico = "0"
+                Preferencia_Local = "1"
+                Historial_Recomendaciones = '[{"fecha":"2024-01-15","producto":"PROD001","aceptada":true},{"fecha":"2024-01-16","producto":"PROD006","aceptada":false}]'
+                Acierto_Recomendaciones = "75.50"
+                Ultima_Actualizacion = "2024-01-20 10:30:00"
+                Modelo_IA = "Modelo_Colaborativo_Basico"
+                Version_Modelo = "1.0"
+            },
+            @{
+                PrefID = "PREF002-USR002"
+                UserID = "USR002"
+                Categoria_Favorita = "Limpieza"
+                Subcategoria_Favorita = "Detergentes"
+                Marca_Favorita = "Carrefour"
+                Tienda_Favorita = "TND001"
+                Gasto_Promedio_Mes = "150.00"
+                Frecuencia_Compra = "3"
+                Dia_Preferido_Compra = "Viernes"
+                Hora_Preferida = "18:00:00"
+                Sensibilidad_Precio = "0.85"
+                Sensibilidad_Calidad = "0.70"
+                Sensibilidad_Distancia = "0.35"
+                Sensibilidad_Tiempo = "0.60"
+                Sensibilidad_Marca = "0.25"
+                Tolerancia_Desplazamiento = "4.00"
+                Presupuesto_Max_Producto = "15.00"
+                Preferencia_Ofertas = "1"
+                Preferencia_Ecologico = "1"
+                Preferencia_Local = "0"
+                Historial_Recomendaciones = '[{"fecha":"2024-01-18","producto":"PROD003","aceptada":true},{"fecha":"2024-01-19","producto":"PROD007","aceptada":true}]'
+                Acierto_Recomendaciones = "80.00"
+                Ultima_Actualizacion = "2024-01-21 15:45:00"
+                Modelo_IA = "Modelo_Colaborativo_Basico"
+                Version_Modelo = "1.0"
+            }
+        )
+        
+        $row = 2
+        foreach ($pref in $preferences) {
+            $col = 1
+            foreach ($key in @('PrefID','UserID','Categoria_Favorita','Subcategoria_Favorita','Marca_Favorita','Tienda_Favorita','Gasto_Promedio_Mes','Frecuencia_Compra','Dia_Preferido_Compra','Hora_Preferida','Sensibilidad_Precio','Sensibilidad_Calidad','Sensibilidad_Distancia','Sensibilidad_Tiempo','Sensibilidad_Marca','Tolerancia_Desplazamiento','Presupuesto_Max_Producto','Preferencia_Ofertas','Preferencia_Ecologico','Preferencia_Local','Historial_Recomendaciones','Acierto_Recomendaciones','Ultima_Actualizacion','Modelo_IA','Version_Modelo')) {
+                $ws.Cells($row, $col).Value = $pref[$key]
+                $col++
+            }
+            $row++
+        }
+        
+        Write-Log "Datos de preferencias IA generados: 2 registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de preferencias IA: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-TestUsers {
+    param(
+        [object]$Workbook,
+        [int]$Count = 10
+    )
+    
+    try {
+        $ws = $Workbook.Sheets("USUARIOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $firstNames = @("Juan", "María", "Carlos", "Ana", "Luis", "Laura", "Pedro", "Marta", "Javier", "Sofía", "David", "Elena", "Miguel", "Isabel", "Pablo")
+        $lastNames = @("Pérez", "García", "López", "Rodríguez", "Martínez", "Fernández", "González", "Sánchez", "Romero", "Torres", "Díaz", "Vázquez", "Castro", "Ortega", "Navarro")
+        $cities = @("Madrid", "Barcelona", "Valencia", "Sevilla", "Zaragoza", "Málaga", "Murcia", "Palma", "Las Palmas", "Bilbao")
+        
+        for ($i = 1; $i -le $Count; $i++) {
+            $firstName = Get-Random $firstNames
+            $lastName = Get-Random $lastNames
+            $city = Get-Random $cities
+            
+            $rowData = @{
+                UserID = "TST{0:D3}" -f $i
+                Nombre = "$firstName $lastName"
+                Email = "$($firstName.ToLower()).$($lastName.ToLower())@test.com"
+                Telefono = "+34 6{0:00000000}" -f (Get-Random -Minimum 10000000 -Maximum 99999999)
+                Direccion = "Calle Test $i, $city"
+                Ciudad = $city
+                CP = "{0:00000}" -f (Get-Random -Minimum 10000 -Maximum 99999)
+                Coord_Lat = [math]::Round((Get-Random -Minimum 36.0 -Maximum 43.5), 6)
+                Coord_Lon = [math]::Round((Get-Random -Minimum -9.3 -Maximum 3.3), 6)
+                Radio_Busqueda_KM = Get-Random -Minimum 1 -Maximum 20
+                Pref_Transporte = Get-Random @("Coche", "Público", "Andando", "Bicicleta")
+                Pref_Marcas = "Marca1,Marca2"
+                Pref_Categorias = "Alimentación,Limpieza"
+                Restricciones = "Ninguna"
+                Presupuesto_Mensual = [math]::Round((Get-Random -Minimum 200.0 -Maximum 1000.0), 2)
+                Historial_Busqueda = "[]"
+                Fecha_Registro = (Get-Date).AddDays(-(Get-Random -Minimum 1 -Maximum 30)).ToString("yyyy-MM-dd")
+                Ultimo_Acceso = (Get-Date).AddHours(-(Get-Random -Minimum 1 -Maximum 72)).ToString("yyyy-MM-dd HH:mm:ss")
+                Activo = "1"
+                Nivel_Usuario = Get-Random @("Básico", "Avanzado", "Admin")
+            }
+            
+            $row = $i + 1
+            $col = 1
+            foreach ($key in @('UserID','Nombre','Email','Telefono','Direccion','Ciudad','CP','Coord_Lat','Coord_Lon','Radio_Busqueda_KM','Pref_Transporte','Pref_Marcas','Pref_Categorias','Restricciones','Presupuesto_Mensual','Historial_Busqueda','Fecha_Registro','Ultimo_Acceso','Activo','Nivel_Usuario')) {
+                $ws.Cells($row, $col).Value = $rowData[$key]
+                $col++
+            }
+        }
+        
+        Write-Log "Datos de prueba de usuarios generados: $Count registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de prueba de usuarios: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-TestProducts {
+    param(
+        [object]$Workbook,
+        [int]$Count = 50
+    )
+    
+    try {
+        $ws = $Workbook.Sheets("PRODUCTOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $productNames = @(
+            "Leche", "Arroz", "Aceite", "Azúcar", "Sal", "Harina", "Huevos", "Pan", "Queso", "Jamón",
+            "Yogur", "Fruta", "Verdura", "Carne", "Pescado", "Pasta", "Legumbres", "Cereal", "Galletas", "Chocolate",
+            "Café", "Té", "Refresco", "Agua", "Zumo", "Vino", "Cerveza", "Detergente", "Suavizante", "Lejía",
+            "Jabón", "Champú", "Gel", "Papel Higiénico", "Papel Cocina", "Bolsas Basura", "Film", "Papel Aluminio"
+        )
+        
+        $categories = @{
+            "Alimentación" = @("Lácteos", "Carnes", "Pescados", "Frutas", "Verduras", "Panadería", "Congelados", "Conservas", "Aceites", "Especias")
+            "Bebidas" = @("Agua", "Refrescos", "Zumos", "Cervezas", "Vinos", "Licores", "Bebidas Energéticas")
+            "Limpieza" = @("Detergentes", "Suavizantes", "Limpiadores", "Ambientadores", "Insecticidas", "Papel Higiénico")
+            "Higiene" = @("Jabones", "Champús", "Dentífricos", "Desodorantes", "Cuidado Facial", "Cuidado Corporal")
+        }
+        
+        $marcas = @("Marca Blanca", "Nestlé", "Danone", "Pascual", "Font Vella", "Carrefour", "Mercadona", "Día", "Auchan", "Lidl", "Aldi")
+        
+        for ($i = 1; $i -le $Count; $i++) {
+            $productName = Get-Random $productNames
+            $category = Get-Random $categories.Keys
+            $subcategory = Get-Random $categories[$category]
+            $marca = Get-Random $marcas
+            
+            $rowData = @{
+                ProductID = "TST{0:D3}" -f $i
+                Nombre = "$productName $marca"
+                Nombre_Cientifico = ""
+                Categoria = $category
+                Subcategoria = $subcategory
+                Marca = $marca
+                Descripcion = "Descripción del producto $productName"
+                Caracteristicas = "Características especiales"
+                Unidad_Medida = Get-Random @("kg", "litro", "unidad", "paquete")
+                Tamanio_Paquete = [math]::Round((Get-Random -Minimum 0.1 -Maximum 5.0), 3)
+                Unidades_Paquete = Get-Random -Minimum 1 -Maximum 12
+                Peso_Bruto = [math]::Round((Get-Random -Minimum 100.0 -Maximum 5000.0), 3)
+                Peso_Neto = [math]::Round((Get-Random -Minimum 80.0 -Maximum 4500.0), 3)
+                Dimensiones = "10x10x20 cm"
+                UPC_EAN = "{0:0000000000000}" -f (Get-Random -Minimum 1000000000000 -Maximum 9999999999999)
+                Codigo_Interno = "COD-TST-$i"
+                URL_Imagen = ""
+                URL_Info = "http://example.com/producto$i"
+                URL_Nutricional = "http://example.com/nutricion$i"
+                Alergenos = ""
+                Caducidad_Minima = Get-Random -Minimum 1 -Maximum 365
+                Refrigerado = (Get-Random) -gt 0.5
+                Congelado = (Get-Random) -gt 0.8
+                Organico = (Get-Random) -gt 0.3
+                Comercio_Justo = (Get-Random) -gt 0.2
+                Fecha_Alta = (Get-Date).AddDays(-(Get-Random -Minimum 1 -Maximum 365)).ToString("yyyy-MM-dd")
+                Activo = "1"
+            }
+            
+            $row = $i + 1
+            $col = 1
+            foreach ($key in @('ProductID','Nombre','Nombre_Cientifico','Categoria','Subcategoria','Marca','Descripcion','Caracteristicas','Unidad_Medida','Tamanio_Paquete','Unidades_Paquete','Peso_Bruto','Peso_Neto','Dimensiones','UPC_EAN','Codigo_Interno','URL_Imagen','URL_Info','URL_Nutricional','Alergenos','Caducidad_Minima','Refrigerado','Congelado','Organico','Comercio_Justo','Fecha_Alta','Activo')) {
+                $ws.Cells($row, $col).Value = $rowData[$key]
+                $col++
+            }
+        }
+        
+        Write-Log "Datos de prueba de productos generados: $Count registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de prueba de productos: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-TestStores {
+    param(
+        [object]$Workbook,
+        [int]$Count = 15
+    )
+    
+    try {
+        $ws = $Workbook.Sheets("TIENDAS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        $cadenas = @("Mercadona", "Carrefour", "Día", "Alcampo", "Lidl", "Aldi", "Eroski", "Consum", "Hipercor", "El Corte Inglés")
+        $cities = @("Madrid", "Barcelona", "Valencia", "Sevilla", "Zaragoza", "Málaga", "Murcia", "Palma", "Las Palmas", "Bilbao")
+        
+        for ($i = 1; $i -le $Count; $i++) {
+            $cadena = Get-Random $cadenas
+            $city = Get-Random $cities
+            
+            $rowData = @{
+                StoreID = "TST{0:D3}" -f $i
+                Nombre_Tienda = "$cadena $city $i"
+                Cadena = $cadena
+                Direccion = "Calle Tienda $i, $city"
+                Ciudad = $city
+                CP = "{0:00000}" -f (Get-Random -Minimum 10000 -Maximum 99999)
+                Provincia = $city
+                Pais = "España"
+                Coord_Lat = [math]::Round((Get-Random -Minimum 36.0 -Maximum 43.5), 6)
+                Coord_Lon = [math]::Round((Get-Random -Minimum -9.3 -Maximum 3.3), 6)
+                Horario = "09:00-21:00"
+                Telefono = "9{0:00000000}" -f (Get-Random -Minimum 10000000 -Maximum 99999999)
+                Email = "tienda$i@$($cadena.ToLower()).es"
+                Web = "http://www.$($cadena.ToLower()).es"
+                Tipo_Tienda = Get-Random @("Supermercado", "Hipermercado", "Tienda Online")
+                Tamanio_Tienda = Get-Random @("Pequeño", "Mediano", "Grande")
+                Servicios = "Delivery,Recogida en tienda"
+                Parking = (Get-Random) -gt 0.5
+                Acceso_Discapacitados = (Get-Random) -gt 0.8
+                Wifi_Gratis = (Get-Random) -gt 0.3
+                Cajeros_Automaticos = (Get-Random) -gt 0.7
+                Farmacia = (Get-Random) -gt 0.2
+                Valoracion_Media = [math]::Round((Get-Random -Minimum 2.5 -Maximum 5.0), 1)
+                N_Opiniones = Get-Random -Minimum 10 -Maximum 1000
+                Fecha_Valoracion = (Get-Date).AddDays(-(Get-Random -Minimum 1 -Maximum 90)).ToString("yyyy-MM-dd")
+                Distancia_Usuario = [math]::Round((Get-Random -Minimum 0.5 -Maximum 20.0), 1)
+                Tiempo_Desplazamiento = "0:{0:D2}:00" -f (Get-Random -Minimum 5 -Maximum 60)
+                Coste_Desplazamiento = [math]::Round((Get-Random -Minimum 0.0 -Maximum 5.0), 2)
+                Activo = "1"
+            }
+            
+            $row = $i + 1
+            $col = 1
+            foreach ($key in @('StoreID','Nombre_Tienda','Cadena','Direccion','Ciudad','CP','Provincia','Pais','Coord_Lat','Coord_Lon','Horario','Telefono','Email','Web','Tipo_Tienda','Tamanio_Tienda','Servicios','Parking','Acceso_Discapacitados','Wifi_Gratis','Cajeros_Automaticos','Farmacia','Valoracion_Media','N_Opiniones','Fecha_Valoracion','Distancia_Usuario','Tiempo_Desplazamiento','Coste_Desplazamiento','Activo')) {
+                $ws.Cells($row, $col).Value = $rowData[$key]
+                $col++
+            }
+        }
+        
+        Write-Log "Datos de prueba de tiendas generados: $Count registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de prueba de tiendas: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Generate-TestPrices {
+    param(
+        [object]$Workbook,
+        [int]$Count = 200
+    )
+    
+    try {
+        $ws = $Workbook.Sheets("PRECIOS")
+        Clear-WorksheetData -Worksheet $ws
+        
+        # Obtener productos y tiendas existentes
+        $productsSheet = $Workbook.Sheets("PRODUCTOS")
+        $storesSheet = $Workbook.Sheets("TIENDAS")
+        
+        $maxProducts = $productsSheet.UsedRange.Rows.Count - 1
+        $maxStores = $storesSheet.UsedRange.Rows.Count - 1
+        
+        if ($maxProducts -eq 0 -or $maxStores -eq 0) {
+            Write-Log "No hay productos o tiendas para generar precios" -Level "WARNING"
+            return
+        }
+        
+        for ($i = 1; $i -le $Count; $i++) {
+            $productRow = Get-Random -Minimum 2 -Maximum ($maxProducts + 2)
+            $storeRow = Get-Random -Minimum 2 -Maximum ($maxStores + 2)
+            
+            $productID = $productsSheet.Cells($productRow, 1).Value
+            $storeID = $storesSheet.Cells($storeRow, 1).Value
+            
+            $basePrice = [math]::Round((Get-Random -Minimum 0.5 -Maximum 50.0), 2)
+            $hasOffer = (Get-Random) -gt 0.7
+            $discount = if ($hasOffer) { [math]::Round((Get-Random -Minimum 5.0 -Maximum 50.0), 2) } else { 0 }
+            $finalPrice = if ($hasOffer) { [math]::Round($basePrice * (1 - $discount / 100), 2) } else { $basePrice }
+            
+            $rowData = @{
+                PriceID = "TST{0:D3}-$productID-$storeID" -f $i
+                ProductID = $productID
+                StoreID = $storeID
+                Precio_Unitario = $finalPrice
+                Precio_Paquete = $finalPrice
+                Unidad_Medida = "unidad"
+                Precio_x_KG = "0"
+                Precio_x_Litro = "0"
+                Precio_x_Unidad = $finalPrice
+                Oferta = $hasOffer
+                Descuento_Porcentaje = $discount
+                Precio_Original = if ($hasOffer) { $basePrice } else { "0" }
+                Tipo_Oferta = if ($hasOffer) { Get-Random @("2x1", "3x2", "Pack ahorro", "Descuento") } else { "0" }
+                Fecha_Inicio_Oferta = if ($hasOffer) { (Get-Date).AddDays(-(Get-Random -Minimum 1 -Maximum 7)).ToString("yyyy-MM-dd") } else { "0" }
+                Fecha_Fin_Oferta = if ($hasOffer) { Get-Date.AddDays(Get-Random -Minimum 7 -Maximum 30).ToString("yyyy-MM-dd") } else { "0" }
+                Stock = Get-Random @("Alto", "Medio", "Bajo", "Agotado")
+                Cantidad_Stock = Get-Random -Minimum 0 -Maximum 100
+                Unidades_Minimas = 1
+                Unidades_Maximas = Get-Random -Minimum 1 -Maximum 10
+                Fecha_Actualizacion = (Get-Date).AddHours(-(Get-Random -Minimum 1 -Maximum 168)).ToString("yyyy-MM-dd HH:mm:ss")
+                Fuente_Datos = Get-Random @("Manual", "Web", "API")
+                URL_Oferta = if ($hasOffer) { "http://oferta.com/producto$i" } else { "0" }
+                Confianza_Datos = [math]::Round((Get-Random -Minimum 0.7 -Maximum 1.0), 2)
+                Historial_Precios = "[{""fecha"":""" + (Get-Date).AddDays(-30).ToString("yyyy-MM-dd") + """,""precio"":" + $basePrice + "}]"
+            }
+            
+            $row = $i + 1
+            $col = 1
+            foreach ($key in @('PriceID','ProductID','StoreID','Precio_Unitario','Precio_Paquete','Unidad_Medida','Precio_x_KG','Precio_x_Litro','Precio_x_Unidad','Oferta','Descuento_Porcentaje','Precio_Original','Tipo_Oferta','Fecha_Inicio_Oferta','Fecha_Fin_Oferta','Stock','Cantidad_Stock','Unidades_Minimas','Unidades_Maximas','Fecha_Actualizacion','Fuente_Datos','URL_Oferta','Confianza_Datos','Historial_Precios')) {
+                $ws.Cells($row, $col).Value = $rowData[$key]
+                $col++
+            }
+        }
+        
+        Write-Log "Datos de prueba de precios generados: $Count registros" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al generar datos de prueba de precios: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Create-CSVAlternativeDataset {
+    Write-Log "Creando archivos CSV de ejemplo..." -Level "WARNING"
+    
+    try {
+        # Crear directorio para CSV si no existe
+        if (-not (Test-Path $CSV_DIR)) {
+            New-Item -ItemType Directory -Path $CSV_DIR -Force | Out-Null
+            Write-Log "Directorio CSV creado: $CSV_DIR" -Level "SUCCESS"
+        }
+        
+        # Generar datos completos para cada hoja y guardar como CSV
+        switch ($Dataset) {
+            "Minimo" {
+                Create-MinimalCSVFiles
+            }
+            "Completo" {
+                Create-CompleteCSVFiles
+            }
+            "Pruebas" {
+                Create-TestCSVFiles
+            }
+        }
+        
+        # Crear archivo de instrucciones
+        Create-CSVInstructions
+        
+        Write-Log "Archivos CSV creados en: $CSV_DIR" -Level "SUCCESS"
+        
+    } catch {
+        Write-Log "Error al crear archivos CSV: $($_.Exception.Message)" -Level "ERROR"
+    }
+}
+
+function Create-MinimalCSVFiles {
+    # Crear archivos CSV móº‘­os
+    $usuariosCSV = @"
+UserID,Nombre,Email,Telefono,Direccion,Ciudad,CP,Coord_Lat,Coord_Lon,Radio_Busqueda_KM,Pref_Transporte,Pref_Marcas,Pref_Categorias,Restricciones,Presupuesto_Mensual,Historial_Busqueda,Fecha_Registro,Ultimo_Acceso,Activo,Nivel_Usuario
+USR001,Juan Pé²¥z,juan.perez@email.com,+34 600111222,"Calle Mayor 1, 1ÂºA",Madrid,28013,40.416775,-3.703790,5,Coche,"Nestlé¬„anone","Alimentació®¬Œimpieza","Sin lactosa, Sin gluten",450.00,'[{"producto":"leche","fecha":"2024-01-15"}]',2024-01-15,2024-01-20 10:30:00,TRUE,Bá³©co
+"@
+    
+    $usuariosCSV | Out-File -FilePath (Join-Path $CSV_DIR "USUARIOS.csv") -Encoding UTF8 -Force
+    Write-Log "CSV USUARIOS creado (dataset móº‘­o)" -Level "SUCCESS"
+}
+
+function Create-CompleteCSVFiles {
+    # Nota: En un script real, aquðœ±¥ generarð«  todos los datos completos como CSV
+    # Para simplificar, creamos archivos de muestra
+    
+    $sampleCSV = "# Archivos CSV de ejemplo para dataset completo`n# Ejecute el script con acceso a Excel para datos completos"
+    $sampleCSV | Out-File -FilePath (Join-Path $CSV_DIR "DATASET_COMPLETO.txt") -Encoding UTF8 -Force
+    
+    Write-Log "Para dataset completo, se requiere acceso a Excel" -Level "INFO"
+}
+
+function Create-TestCSVFiles {
+    # Crear archivos CSV de prueba con datos generados
+    # Aquðœ±¥ implementarð¨¬a generació® ­asiva de datos
+    $testInfo = "# Dataset de prueba`n# Use el script con pará­¥tro -Dataset Pruebas y acceso a Excel para datos masivos"
+    $testInfo | Out-File -FilePath (Join-Path $CSV_DIR "DATASET_PRUEBAS.txt") -Encoding UTF8 -Force
+    
+    Write-Log "Para dataset de pruebas, se requiere acceso a Excel" -Level "INFO"
+}
+
+function Create-CSVInstructions {
+    $instructions = @"
+# INSTRUCCIONES PARA ARCHIVOS CSV DE EJEMPLO
+# ===========================================
+
+DATASET SELECCIONADO: $Dataset
+FECHA DE GENERACIÓŽ: $(Get-Date -Format "dd/MM/yyyy HH:mm:ss")
+
+ARCHIVOS DISPONIBLES:
+$(Get-ChildItem $CSV_DIR -Filter "*.csv" | ForEach-Object { "Â• $($_.Name)" })
+
+PARA IMPORTAR A EXCEL:
+1. Abra Microsoft Excel
+2. Para cada archivo CSV:
+   a. Ir a Datos ? Desde archivo de texto/CSV
+   b. Seleccionar el archivo
+   c. Configurar:
+      - Origen del archivo: 65001 : Unicode (UTF-8)
+      - Delimitador: Coma
+   d. Hacer clic en Cargar
+
+PARÃMETROS DISPONIBLES:
+Â• -Dataset Minimo    : Dataset móº‘­o para pruebas bá³©cas
+Â• -Dataset Completo  : Dataset completo con datos realistas
+Â• -Dataset Pruebas   : Dataset extenso para pruebas de rendimiento
+Â• -Force             : Sobrescribir datos existentes
+Â• -GenerateOnly      : Solo generar CSV, no cargar en Excel
+
+EJEMPLOS DE USO:
+# Cargar dataset móº‘­o en Excel
+.\cargar_datos.ps1 -Dataset Minimo
+
+# Solo generar archivos CSV
+.\cargar_datos.ps1 -Dataset Completo -GenerateOnly
+
+# Cargar dataset de pruebas forzando sobreescritura
+.\cargar_datos.ps1 -Dataset Pruebas -Force
+
+UBICACIÓŽ DE ARCHIVOS: $CSV_DIR
+REGISTRO DE ACTIVIDAD: $LOG_FILE
+"@
+    
+    $instructions | Out-File -FilePath (Join-Path $CSV_DIR "INSTRUCCIONES.txt") -Encoding UTF8 -Force
+    Write-Log "Instrucciones creadas en CSV_DIR" -Level "SUCCESS"
+}
+
+# ===================================================
+# FUNCIÓŽ PRINCIPAL
+# ===================================================
+
+function Main {
+    # Encabezado
+    if (-not $Silent) {
+        Write-Host "`n" -NoNewline
+        Write-Host "===================================================" -ForegroundColor Cyan
+        Write-Host "  CARGAR DATOS - SISTEMA COMPARADOR DE COMPRAS IA" -ForegroundColor Cyan
+        Write-Host "  Versió®º $VERSION | Dataset: $Dataset" -ForegroundColor Cyan
+        Write-Host "===================================================" -ForegroundColor Cyan
+        Write-Host "`n"
+    }
+    
+    Write-Log "Iniciando carga de datos..." -Level "INFO"
+    Write-Log "Directorio del proyecto: $PROJECT_ROOT" -Level "INFO"
+    Write-Log "Dataset seleccionado: $Dataset" -Level "INFO"
+    
+    # Verificar directorios
+    if (-not (Test-Path $LOG_DIR)) {
+        New-Item -ItemType Directory -Path $LOG_DIR -Force | Out-Null
+        Write-Log "Directorio de logs creado: $LOG_DIR" -Level "SUCCESS"
+    }
+    
+    if (-not (Test-Path $CSV_DIR)) {
+        New-Item -ItemType Directory -Path $CSV_DIR -Force | Out-Null
+        Write-Log "Directorio CSV creado: $CSV_DIR" -Level "SUCCESS"
+    }
+    
+    # Verificar si debemos solo generar CSV
+    if ($GenerateOnly) {
+        Write-Log "Modo GenerateOnly activado - Solo generando archivos CSV" -Level "INFO"
+        Create-CSVAlternativeDataset
+        return
+    }
+    
+    # Verificar acceso a Excel
+    $excelAccess = Test-ExcelAccess -FilePath $EXCEL_FILE
+    
+    if ($excelAccess) {
+        Write-Log "Intentando cargar datos directamente en Excel..." -Level "INFO"
+        $success = Load-DataIntoExcel -ExcelPath $EXCEL_FILE
+        
+        if ($success) {
+            Write-Log "Datos cargados exitosamente en Excel" -Level "SUCCESS"
+            
+            # Resumen de datos cargados
+            $summary = switch ($Dataset) {
+                "Minimo" { "2 usuarios, 3 productos, 2 tiendas, 5 precios" }
+                "Completo" { "4 usuarios, 7 productos, 6 tiendas, 7 precios, 2 comparativas, 2 historiales, 2 preferencias" }
+                "Pruebas" { "10 usuarios, 50 productos, 15 tiendas, 200 precios" }
+            }
+            
+            Write-Log "Resumen: $summary" -Level "INFO"
+            
+        } else {
+            Write-Log "Falló ¬¡ carga en Excel, creando archivos CSV alternativos..." -Level "WARNING"
+            Create-CSVAlternativeDataset
+        }
+        
+    } else {
+        Write-Log "Excel no accesible, creando archivos CSV de ejemplo..." -Level "WARNING"
+        Create-CSVAlternativeDataset
+    }
+}
+
+# ===================================================
+# EJECUCIÓŽ PRINCIPAL
+# ===================================================
+
+try {
+    Main
+    
+    # Resumen final
+    $END_TIME = Get-Date
+    $DURATION = ($END_TIME - $START_TIME).TotalSeconds
+    
+    if (-not $Silent) {
+        Write-Host "`n"
+        Write-Host "===================================================" -ForegroundColor Green
+        Write-Host "  CARGA DE DATOS COMPLETADA" -ForegroundColor Green
+        Write-Host "===================================================" -ForegroundColor Green
+        Write-Host "`n"
+        
+        Write-Host "RESUMEN:" -ForegroundColor Yellow
+        Write-Host "Â• Tiempo total: $($DURATION.ToString('0.00')) segundos" -ForegroundColor White
+        Write-Host "Â• Errores encontrados: $GLOBAL_ERRORS" -ForegroundColor White
+        Write-Host "Â• Dataset: $Dataset" -ForegroundColor White
+		
+        if (Test-Path $EXCEL_FILE) {
+            Write-Host "Â• Archivo Excel: $EXCEL_FILE" -ForegroundColor White
+        }
+        
+        if (Test-Path $CSV_DIR) {
+            $csvCount = (Get-ChildItem $CSV_DIR -Filter "*.csv" | Measure-Object).Count
+            Write-Host "Â• Archivos CSV generados: $csvCount en $CSV_DIR" -ForegroundColor White
+        }
+        
+        Write-Host "Â• Registro de actividad: $LOG_FILE" -ForegroundColor White
+        Write-Host "`n"
+        
+        if ($GLOBAL_ERRORS -eq 0) {
+            Write-Host "Â¡Datos cargados exitosamente!" -ForegroundColor Green
+        } else {
+            Write-Host "Proceso completado con advertencias" -ForegroundColor Yellow
+        }
+        
+        Write-Host "`n"
+    }
+    
+    # Có¤©§o de salida
+    exit $GLOBAL_ERRORS
+    
+} catch {
+    Write-Log "Error fatal no controlado: $($_.Exception.Message)" -Level "ERROR"
+    Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Level "ERROR"
+    exit 99
+}

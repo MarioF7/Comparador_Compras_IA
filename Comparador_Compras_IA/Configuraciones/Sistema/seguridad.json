@@ -1,0 +1,19 @@
+﻿{
+    "Seguridad":  {
+                      "Autenticacion":  {
+                                            "MinCaracteres":  8,
+                                            "RequerirEspeciales":  false,
+                                            "RequerirNumeros":  true,
+                                            "RequerirMayusculas":  true
+                                        },
+                      "Encriptacion":  {
+                                           "Salt":  "hGBsvI7L4rzAmsnVy0W6MaP4nEbLFfDH3DW9yeJCI90=",
+                                           "Algoritmo":  "AES-256"
+                                       },
+                      "Sesiones":  {
+                                       "MaxSesiones":  3,
+                                       "Timeout":  30,
+                                       "RenewToken":  true
+                                   }
+                  }
+}

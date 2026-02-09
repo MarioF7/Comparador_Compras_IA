@@ -1,0 +1,616 @@
+@echo off
+chcp 65001 >nul
+title [INSTALADOR] Sistema Comparador de Compras Inteligente IA v3.5
+setlocal enabledelayedexpansion
+
+echo ===================================================
+echo    SISTEMA COMPARADOR DE COMPRAS INTELIGENTE IA
+echo    Versión: 3.5.0 - Edición Empresarial
+echo ===================================================
+echo.
+pausa
+
+:: ===================================================================
+:: CONFIGURACIÓN INICIAL Y VARIABLES
+:: ===================================================================
+set "SCRIPT_VERSION=3.5.0"
+set "FECHA_INSTALACION=%date% %time%"
+set "SCRIPT_DIR=%~dp0"
+set "PROJECT_ROOT=%SCRIPT_DIR%..\Comparador_Compras_IA"
+set "LOG_FILE=%PROJECT_ROOT%\Logs\instalacion_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log"
+
+:: Variables de control
+set "ERROR_FLAG=0"
+set "ADMIN_MODE=0"
+set "EXCEL_INSTALLED=0"
+set "POWERSHELL_VERSION=0"
+
+:: Crear estructura de logs
+if not exist "%PROJECT_ROOT%\Logs" mkdir "%PROJECT_ROOT%\Logs" 2>nul
+
+:: ===================================================================
+:: FASE 1: VERIFICACIÓN DEL SISTEMA
+:: ===================================================================
+call :show_progress "FASE 1: Verificación del sistema operativo y requisitos..."
+
+call :log "==================================================="
+call :log "INICIANDO INSTALACIÓN - Versión !SCRIPT_VERSION!"
+call :log "Fecha: !FECHA_INSTALACION!"
+call :log "Usuario: %USERNAME%"
+call :log "Sistema: %COMPUTERNAME%"
+call :log "Directorio de scripts: !SCRIPT_DIR!"
+call :log "==================================================="
+
+:: Verificar sistema operativo
+ver | findstr /r /c:"Windows [0-9][0-9]*\.[0-9][0-9]*" >nul
+call :check_error "Sistema operativo no compatible. Se requiere Windows 7 o superior."
+
+:: Verificar arquitectura
+if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
+    call :log "[OK] Sistema de 64 bits detectado"
+) else if "%PROCESSOR_ARCHITECTURE%"=="x86" (
+    call :log "[OK] Sistema de 32 bits detectado"
+) else (
+    call :log "[ADVERTENCIA] Arquitectura no estándar: %PROCESSOR_ARCHITECTURE%"
+)
+
+:: Verificar permisos de administrador
+net session >nul 2>&1
+if %errorlevel% equ 0 (
+    set "ADMIN_MODE=1"
+    call :log "[OK] Ejecutando con permisos de administrador"
+) else (
+    call :log "[ADVERTENCIA] Ejecutando sin permisos de administrador"
+    call :log "  Algunas funciones pueden estar limitadas"
+)
+
+:: Verificar PowerShell
+where powershell >nul 2>&1
+if %errorlevel% equ 0 (
+    for /f "tokens=2 delims=:" %%i in ('powershell -Command "$PSVersionTable.PSVersion.Major"') do (
+        set "POWERSHELL_VERSION=%%i"
+    )
+    call :log "[OK] PowerShell !POWERSHELL_VERSION! detectado"
+) else (
+    call :log "[ERROR CRÍTICO] PowerShell no encontrado"
+    set /a ERROR_FLAG+=3
+)
+
+:: Verificar .NET Framework (requerido para algunas funciones)
+reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Release >nul 2>&1
+if %errorlevel% equ 0 (
+    call :log "[OK] .NET Framework 4.0 o superior detectado"
+) else (
+    call :log "[ADVERTENCIA] .NET Framework 4.0+ no detectado"
+    call :log "  Algunas funciones avanzadas pueden no estar disponibles"
+)
+
+:: Verificar Excel
+reg query "HKLM\SOFTWARE\Microsoft\Office" /s 2>nul | findstr /i "Excel" >nul
+if %errorlevel% equ 0 (
+    set "EXCEL_INSTALLED=1"
+    call :log "[OK] Microsoft Excel detectado"
+) else (
+    reg query "HKCU\SOFTWARE\Microsoft\Office" /s 2>nul | findstr /i "Excel" >nul
+    if %errorlevel% equ 0 (
+        set "EXCEL_INSTALLED=1"
+        call :log "[OK] Microsoft Excel detectado (instalación por usuario)"
+    ) else (
+        call :log "[ADVERTENCIA] Microsoft Excel no detectado"
+        call :log "  Se crearán archivos CSV como alternativa"
+    )
+)
+
+:: Verificar espacio en disco
+for /f "tokens=3" %%a in ('dir /-c %SystemDrive% ^| findstr /c:"bytes libres"') do set "FREE_SPACE=%%a"
+set "FREE_SPACE=!FREE_SPACE:,=!"
+if !FREE_SPACE! LSS 104857600 (
+    call :log "[ADVERTENCIA] Espacio libre en disco bajo: !FREE_SPACE! bytes"
+    call :log "  Se recomienda al menos 100MB de espacio libre"
+) else (
+    call :log "[OK] Espacio en disco suficiente: !FREE_SPACE! bytes"
+)
+
+if !ERROR_FLAG! GEQ 3 (
+    call :log "[ERROR] Demasiados errores críticos. Abortando instalación."
+    pause
+    exit /b 1
+)
+
+:: ===================================================================
+:: FASE 2: PREPARACIÓN DEL ENTORNO
+:: ===================================================================
+call :show_progress "FASE 2: Preparando entorno de instalación..."
+
+:: Verificar si el proyecto ya existe
+if exist "!PROJECT_ROOT!" (
+    call :log "[ATENCIÓN] El proyecto ya existe en: !PROJECT_ROOT!"
+    
+    :: Crear backup antes de sobrescribir
+    set "BACKUP_DIR=!PROJECT_ROOT!\_backup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%"
+    call :log "Creando backup en: !BACKUP_DIR!"
+    
+    xcopy "!PROJECT_ROOT!" "!BACKUP_DIR!" /E /I /H /Y /Q >nul 2>&1
+    if %errorlevel% equ 0 (
+        call :log "[OK] Backup creado exitosamente"
+    ) else (
+        call :log "[ERROR] No se pudo crear backup"
+    )
+    
+    :: Preguntar al usuario
+    echo.
+    set /p CONFIRM_OVERWRITE="¿Desea reinstalar el sistema? (S/N): "
+    if /i "!CONFIRM_OVERWRITE!" NEQ "S" (
+        call :log "[INFO] Instalación cancelada por el usuario"
+        echo.
+        echo Instalación cancelada. El sistema existente no ha sido modificado.
+        pause
+        exit /b 0
+    )
+    
+    :: Limpiar instalación anterior
+    call :log "Eliminando instalación anterior..."
+    rmdir /s /q "!PROJECT_ROOT!" 2>nul
+    timeout /t 3 /nobreak >nul
+)
+
+:: ===================================================================
+:: FASE 3: CREACIÓN DE ESTRUCTURA DE CARPETAS
+:: ===================================================================
+call :show_progress "FASE 3: Creando estructura de carpetas..."
+
+:: Crear carpeta principal
+mkdir "!PROJECT_ROOT!" 2>nul
+if not exist "!PROJECT_ROOT!" (
+    call :log "[ERROR] No se pudo crear la carpeta principal"
+    pause
+    exit /b 1
+)
+
+:: Lista de carpetas a crear (según documentación completa)
+set "FOLDERS=Data_Backup Configuraciones Scripts_IA Reportes Tickets Templates Logs Cache Exportaciones Datos_Externos Plantillas_IA Modelos_ML"
+
+for %%f in (!FOLDERS!) do (
+    mkdir "!PROJECT_ROOT!\%%f" 2>nul
+    if exist "!PROJECT_ROOT!\%%f" (
+        call :log "  [✓] !PROJECT_ROOT!\%%f"
+    ) else (
+        call :log "  [✗] Error creando: !PROJECT_ROOT!\%%f"
+        set /a ERROR_FLAG+=1
+    )
+)
+
+:: Crear subcarpetas específicas
+mkdir "!PROJECT_ROOT!\Data_Backup\Diario" 2>nul
+mkdir "!PROJECT_ROOT!\Data_Backup\Semanal" 2>nul
+mkdir "!PROJECT_ROOT!\Data_Backup\Mensual" 2>nul
+mkdir "!PROJECT_ROOT!\Reportes\PDF" 2>nul
+mkdir "!PROJECT_ROOT!\Reportes\Excel" 2>nul
+mkdir "!PROJECT_ROOT!\Reportes\HTML" 2>nul
+mkdir "!PROJECT_ROOT!\Tickets\Imagenes" 2>nul
+mkdir "!PROJECT_ROOT!\Tickets\PDF" 2>nul
+mkdir "!PROJECT_ROOT!\Templates\Email" 2>nul
+mkdir "!PROJECT_ROOT!\Templates\Reportes" 2>nul
+mkdir "!PROJECT_ROOT!\Cache\Imagenes" 2>nul
+mkdir "!PROJECT_ROOT!\Cache\Datos" 2>nul
+
+call :log "[OK] Estructura de carpetas creada exitosamente"
+
+:: ===================================================================
+:: FASE 4: EJECUCIÓN DE SCRIPTS DE CONFIGURACIÓN
+:: ===================================================================
+call :show_progress "FASE 4: Ejecutando scripts de configuración..."
+
+:: Configurar política de ejecución de PowerShell temporalmente
+call :log "Configurando política de ejecución de PowerShell..."
+powershell -Command "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force" >nul 2>&1
+
+:: Ejecutar scripts en orden con verificación de errores
+set "SCRIPTS=crear_excel.ps1 cargar_datos.ps1 configurar_sistema.ps1"
+
+for %%s in (!SCRIPTS!) do (
+    if exist "!SCRIPT_DIR!\%%s" (
+        call :log "Ejecutando: %%s"
+        powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!"
+        if !errorlevel! neq 0 (
+            call :log "[ERROR] Fallo al ejecutar: %%s (Código: !errorlevel!)"
+            set /a ERROR_FLAG+=1
+        ) else (
+            call :log "[OK] %%s ejecutado exitosamente"
+        )
+    ) else (
+        call :log "[ADVERTENCIA] Script no encontrado: %%s"
+    )
+)
+
+:: Ejecutar script VBScript para macros
+if exist "!SCRIPT_DIR!\agregar_macros.vbs" (
+    call :log "Ejecutando: agregar_macros.vbs"
+    cscript //nologo "!SCRIPT_DIR!\agregar_macros.vbs" "!PROJECT_ROOT!"
+    if !errorlevel! neq 0 (
+        call :log "[ADVERTENCIA] Fallo al agregar macros (Código: !errorlevel!)"
+    ) else (
+        call :log "[OK] Macros agregadas exitosamente"
+    )
+)
+
+:: ===================================================================
+:: FASE 5: CREACIÓN DE ARCHIVOS DE CONFIGURACIÓN
+:: ===================================================================
+call :show_progress "FASE 5: Creando archivos de configuración..."
+
+:: Archivo de configuración principal del sistema
+call :log "Creando config_sistema.json..."
+(
+echo {
+echo   "sistema": {
+echo     "version": "!SCRIPT_VERSION!",
+echo     "fecha_instalacion": "!FECHA_INSTALACION!",
+echo     "sistema_operativo": "%OS%",
+echo     "arquitectura": "%PROCESSOR_ARCHITECTURE%",
+echo     "usuario": "%USERNAME%",
+echo     "equipo": "%COMPUTERNAME%"
+echo   },
+echo   "configuracion": {
+echo     "backup": {
+echo       "automatico": true,
+echo       "intervalo_horas": 24,
+echo       "max_backups_diarios": 7,
+echo       "max_backups_semanales": 4,
+echo       "max_backups_mensuales": 12
+echo     },
+echo     "aplicacion": {
+echo       "moneda": "EUR",
+echo       "formato_fecha": "dd/MM/yyyy",
+echo       "formato_hora": "HH:mm:ss",
+echo       "unidad_distancia": "km",
+echo       "unidad_peso": "kg",
+echo       "unidad_volumen": "l",
+echo       "idioma": "es"
+echo     },
+echo     "rendimiento": {
+echo       "cache_habilitado": true,
+echo       "max_cache_mb": 100,
+echo       "log_detallado": false,
+echo       "auto_actualizar": true
+echo     },
+echo     "seguridad": {
+echo       "encriptar_datos": false,
+echo       "hash_passwords": true,
+echo       "sesion_timeout_min": 30,
+echo       "max_intentos_login": 3
+echo     }
+echo   },
+echo   "rutas": {
+echo     "raiz": "!PROJECT_ROOT!",
+echo     "backup": "!PROJECT_ROOT!\Data_Backup",
+echo     "config": "!PROJECT_ROOT!\Configuraciones",
+echo     "logs": "!PROJECT_ROOT!\Logs",
+echo     "reportes": "!PROJECT_ROOT!\Reportes",
+echo     "cache": "!PROJECT_ROOT!\Cache"
+echo   }
+echo }
+) > "!PROJECT_ROOT!\Configuraciones\config_sistema.json" 2>nul
+
+:: Archivo de instrucciones mejorado
+call :log "Creando INSTRUCCIONES_PROYECTO.txt..."
+(
+echo ===================================================
+echo    SISTEMA COMPARADOR DE COMPRAS INTELIGENTE IA
+echo    Versión: !SCRIPT_VERSION! - Edición Empresarial
+echo ===================================================
+echo.
+echo FECHA DE INSTALACIÓN: !FECHA_INSTALACION!
+echo USUARIO: %USERNAME%
+echo EQUIPO: %COMPUTERNAME%
+echo.
+echo UBICACIÓN DEL PROYECTO: !PROJECT_ROOT!
+echo.
+echo ════════════════════════════════════════════════════
+echo ESTRUCTURA DE CARPETAS:
+echo ════════════════════════════════════════════════════
+echo.
+echo 📁 Data_Backup/
+echo │   ├── Diario/      - Copias de seguridad diarias
+echo │   ├── Semanal/     - Copias de seguridad semanales
+echo │   └── Mensual/     - Copias de seguridad mensuales
+echo.
+echo 📁 Configuraciones/
+echo │   └── config_sistema.json - Configuración del sistema
+echo.
+echo 📁 Scripts_IA/
+echo │   ├── analisis_precios.py      - Análisis de precios con IA
+echo │   ├── recomendaciones.py       - Sistema de recomendaciones
+echo │   └── modelos_ml/              - Modelos de machine learning
+echo.
+echo 📁 Reportes/
+echo │   ├── PDF/         - Reportes en formato PDF
+echo │   ├── Excel/       - Reportes en Excel
+echo │   └── HTML/        - Reportes web interactivos
+echo.
+echo 📁 Tickets/
+echo │   ├── Imagenes/    - Tickets escaneados (JPG, PNG)
+echo │   └── PDF/         - Tickets en formato PDF
+echo.
+echo 📁 Templates/
+echo │   ├── Email/       - Plantillas de correo electrónico
+echo │   └── Reportes/    - Plantillas de reportes
+echo.
+echo 📁 Logs/
+echo │   └── instalacion_*.log - Registros de instalación
+echo.
+echo 📁 Cache/
+echo │   ├── Imagenes/    - Imágenes en caché
+echo │   └── Datos/       - Datos temporales
+echo.
+echo 📁 Exportaciones/
+echo │   └── Datos exportados para uso externo
+echo.
+echo 📁 Datos_Externos/
+echo │   └── Datos importados de fuentes externas
+echo.
+echo ════════════════════════════════════════════════════
+echo ARCHIVOS PRINCIPALES:
+echo ════════════════════════════════════════════════════
+echo.
+echo 📊 Comparador_Compras_IA_Completo.xlsm
+echo   - Archivo Excel principal con macros habilitadas
+echo   - Contiene todas las hojas del sistema
+echo   - Incluye menús y herramientas personalizadas
+echo.
+echo ════════════════════════════════════════════════════
+echo INSTRUCCIONES DE USO:
+echo ════════════════════════════════════════════════════
+echo.
+echo 1. INICIO RÁPIDO:
+echo    a) Abra el archivo Excel desde el acceso directo
+echo    b) Habilite las macros cuando se le solicite
+echo    c) Use el menú "Comparador IA" para acceder a funciones
+echo.
+echo 2. CONFIGURACIÓN INICIAL:
+echo    a) Complete sus datos en la hoja USUARIOS
+echo    b) Añada tiendas locales en la hoja TIENDAS
+echo    c) Registre productos en la hoja PRODUCTOS
+echo    d) Ingrese precios en la hoja PRECIOS
+echo.
+echo 3. FUNCIONES PRINCIPALES:
+echo    • Comparación inteligente de precios
+echo    • Optimización de rutas de compra
+echo    • Análisis de tendencias de precios
+echo    • Sistema de alertas y notificaciones
+echo    • Reportes automáticos personalizados
+echo.
+echo 4. MANTENIMIENTO:
+echo    • Realice copias de seguridad regularmente
+echo    • Revise los logs en caso de problemas
+echo    • Actualice los datos de precios periódicamente
+echo    • Consulte la documentación para cambios mayores
+echo.
+echo ════════════════════════════════════════════════════
+echo SOPORTE Y CONTACTO:
+echo ════════════════════════════════════════════════════
+echo.
+echo • Documentación completa incluida en el proyecto
+echo • Registros detallados en la carpeta Logs/
+echo • Plantillas personalizables en Templates/
+echo • Scripts de mantenimiento en Scripts_IA/
+echo.
+echo ════════════════════════════════════════════════════
+echo NOTAS IMPORTANTES:
+echo ════════════════════════════════════════════════════
+echo.
+echo ✓ Mantenga siempre una copia de seguridad actualizada
+echo ✓ No modifique la estructura de columnas en las hojas
+echo ✓ Verifique regularmente la validez de los datos
+echo ✓ Use la función de exportación para compartir datos
+echo.
+echo ===================================================
+echo    ¡SISTEMA INSTALADO Y LISTO PARA USAR!
+echo ===================================================
+) > "!PROJECT_ROOT!\INSTRUCCIONES_PROYECTO.txt"
+
+:: Crear archivo de licencia
+call :log "Creando LICENCIA.txt..."
+(
+echo LICENCIA DE USO - SISTEMA COMPARADOR DE COMPRAS IA
+echo ===================================================
+echo.
+echo Versión: !SCRIPT_VERSION!
+echo Fecha de instalación: !FECHA_INSTALACION!
+echo.
+echo TÉRMINOS DE USO:
+echo 1. Este sistema está diseñado para uso personal y empresarial.
+echo 2. El usuario es responsable de la veracidad de los datos ingresados.
+echo 3. Se recomienda realizar copias de seguridad regularmente.
+echo 4. El desarrollador no se hace responsable por pérdidas de datos.
+echo 5. Este software se proporciona "TAL CUAL" sin garantías.
+echo.
+echo DERECHOS DE AUTOR:
+echo © 2024 Sistema Comparador de Compras IA
+echo Todos los derechos reservados.
+echo.
+echo DISTRIBUCIÓN:
+echo Este sistema puede ser distribuido libremente manteniendo
+echo intactos estos archivos de licencia y créditos.
+) > "!PROJECT_ROOT!\LICENCIA.txt"
+
+:: ===================================================================
+:: FASE 6: CREACIÓN DE ACCESOS DIRECTOS
+:: ===================================================================
+call :show_progress "FASE 6: Creando accesos directos..."
+
+:: Acceso directo en escritorio
+set "DESKTOP_SHORTCUT=%USERPROFILE%\Desktop\Comparador Compras IA.lnk"
+if not exist "!DESKTOP_SHORTCUT!" (
+    (
+    echo Set oWS = WScript.CreateObject("WScript.Shell")
+    echo sLinkFile = "!DESKTOP_SHORTCUT!"
+    echo Set oLink = oWS.CreateShortcut(sLinkFile)
+    echo oLink.TargetPath = "!PROJECT_ROOT!\Comparador_Compras_IA_Completo.xlsm"
+    echo oLink.WorkingDirectory = "!PROJECT_ROOT!"
+    echo oLink.Description = "Sistema Comparador de Compras Inteligente IA v!SCRIPT_VERSION!"
+    echo oLink.IconLocation = "%SystemRoot%\system32\SHELL32.dll,165"
+    echo oLink.Save
+    ) > "%TEMP%\crear_acceso_desktop.vbs"
+    
+    cscript //nologo "%TEMP%\crear_acceso_desktop.vbs" >nul 2>&1
+    del "%TEMP%\crear_acceso_desktop.vbs" 2>nul
+    
+    if exist "!DESKTOP_SHORTCUT!" (
+        call :log "[OK] Acceso directo creado en el escritorio"
+    ) else (
+        call :log "[ADVERTENCIA] No se pudo crear acceso directo en escritorio"
+    )
+)
+
+:: Acceso directo en menú inicio
+if !ADMIN_MODE! equ 1 (
+    set "START_MENU_DIR=%ProgramData%\Microsoft\Windows\Start Menu\Programs\Comparador Compras IA"
+    mkdir "!START_MENU_DIR!" 2>nul
+    
+    if exist "!START_MENU_DIR!" (
+        (
+        echo Set oWS = WScript.CreateObject("WScript.Shell")
+        echo sLinkFile = "!START_MENU_DIR!\Comparador Compras IA.lnk"
+        echo Set oLink = oWS.CreateShortcut(sLinkFile)
+        echo oLink.TargetPath = "!PROJECT_ROOT!\Comparador_Compras_IA_Completo.xlsm"
+        echo oLink.WorkingDirectory = "!PROJECT_ROOT!"
+        echo oLink.Description = "Sistema Comparador de Compras Inteligente IA"
+        echo oLink.Save
+        ) > "%TEMP%\crear_acceso_startmenu.vbs"
+        
+        cscript //nologo "%TEMP%\crear_acceso_startmenu.vbs" >nul 2>&1
+        del "%TEMP%\crear_acceso_startmenu.vbs" 2>nul
+        
+        call :log "[OK] Acceso directo creado en el menú Inicio"
+    )
+)
+
+:: ===================================================================
+:: FASE 7: VERIFICACIÓN FINAL
+:: ===================================================================
+call :show_progress "FASE 7: Realizando verificación final..."
+
+:: Verificar archivos creados
+set "REQUIRED_FILES=Comparador_Compras_IA_Completo.xlsm INSTRUCCIONES_PROYECTO.txt LICENCIA.txt"
+
+set "FILES_FOUND=0"
+set "FILES_TOTAL=0"
+
+for %%f in (!REQUIRED_FILES!) do (
+    set /a FILES_TOTAL+=1
+    if exist "!PROJECT_ROOT!\%%f" (
+        set /a FILES_FOUND+=1
+        call :log "  [✓] %%f encontrado"
+    ) else (
+        call :log "  [✗] %%f NO encontrado"
+    )
+)
+
+:: Verificar integridad
+if !FILES_FOUND! equ !FILES_TOTAL! (
+    call :log "[OK] Todos los archivos requeridos están presentes"
+) else (
+    call :log "[ADVERTENCIA] Faltan algunos archivos: !FILES_FOUND!/!FILES_TOTAL!"
+    set /a ERROR_FLAG+=1
+)
+
+:: Verificar permisos de escritura
+echo test > "!PROJECT_ROOT!\test_write.tmp" 2>nul
+if exist "!PROJECT_ROOT!\test_write.tmp" (
+    del "!PROJECT_ROOT!\test_write.tmp" 2>nul
+    call :log "[OK] Permisos de escritura verificados"
+) else (
+    call :log "[ERROR] Sin permisos de escritura en la carpeta del proyecto"
+    set /a ERROR_FLAG+=2
+)
+
+:: ===================================================================
+:: FASE 8: RESUMEN Y FINALIZACIÓN
+:: ===================================================================
+call :show_progress "FASE 8: Generando resumen de instalación..."
+
+echo.
+echo ===================================================
+echo    RESUMEN DE INSTALACIÓN
+echo ===================================================
+echo.
+echo Estado: !ERROR_FLAG! errores detectados
+echo.
+echo Directorio del proyecto: !PROJECT_ROOT!
+echo.
+echo Archivos importantes:
+echo • !PROJECT_ROOT!\Comparador_Compras_IA_Completo.xlsm
+echo • !PROJECT_ROOT!\INSTRUCCIONES_PROYECTO.txt
+echo • !PROJECT_ROOT!\Configuraciones\config_sistema.json
+echo.
+echo Accesos directos creados:
+if exist "!DESKTOP_SHORTCUT!" echo • Escritorio: Comparador Compras IA.lnk
+if exist "!START_MENU_DIR!\Comparador Compras IA.lnk" echo • Menú Inicio: Comparador Compras IA
+echo.
+echo Tamaño del proyecto: 
+for /f "tokens=3" %%a in ('dir /s /c "!PROJECT_ROOT!" 2^>nul ^| findstr "bytes"') do echo • %%a bytes
+echo.
+echo Registro de instalación: !LOG_FILE!
+echo.
+echo ===================================================
+if !ERROR_FLAG! equ 0 (
+    echo    ¡INSTALACIÓN COMPLETADA EXITOSAMENTE!
+) else if !ERROR_FLAG! leq 2 (
+    echo    INSTALACIÓN COMPLETADA CON ADVERTENCIAS
+) else (
+    echo    INSTALACIÓN COMPLETADA CON ERRORES
+)
+echo ===================================================
+echo.
+echo PRÓXIMOS PASOS:
+echo 1. Abra el archivo Excel desde el acceso directo
+echo 2. Habilite las macros cuando se le solicite
+echo 3. Revise las instrucciones en INSTRUCCIONES_PROYECTO.txt
+echo 4. Configure sus datos iniciales en las hojas
+echo 5. Explore las funciones desde el menú "Comparador IA"
+echo.
+echo Soporte y documentación:
+echo • Consulte !PROJECT_ROOT!\INSTRUCCIONES_PROYECTO.txt
+echo • Revise los logs en !PROJECT_ROOT!\Logs\
+echo • Las plantillas están en !PROJECT_ROOT!\Templates\
+echo.
+echo ¡Gracias por instalar el Sistema Comparador de Compras IA!
+echo.
+
+:: Pausa final
+if "%~1" NEQ "/SILENT" (
+    pause
+)
+
+:: Cerrar con código de error apropiado
+if !ERROR_FLAG! equ 0 (
+    exit /b 0
+) else if !ERROR_FLAG! leq 2 (
+    exit /b 1
+) else (
+    exit /b 2
+)
+
+:: ===================================================================
+:: FUNCIONES DE UTILIDAD
+:: ===================================================================
+:log
+    echo [%date% %time%] %~1 >> "%LOG_FILE%" 2>nul
+    echo %~1
+goto :eof
+
+:check_error
+    if %ERRORLEVEL% neq 0 (
+        set /a ERROR_FLAG+=1
+        echo [ERROR] %~1 >> "%LOG_FILE%" 2>nul
+        echo [ERROR] %~1
+    )
+goto :eof
+
+:show_progress
+    echo.
+    echo [PROGRESO] %~1
+    echo [PROGRESO] %~1 >> "%LOG_FILE%" 2>nul
+    echo.
+goto :eof

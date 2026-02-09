@@ -1,0 +1,16 @@
+================================
+SISTEMA COMPARADOR DE COMPRAS IA
+================================
+
+INSTRUCCIONES:
+1. Abrir "Comparador_Compras_IA_Completo.xlsm"
+2. Habilitar macros cuando Excel lo solicite
+3. Seguir los pasos en la hoja "00_INSTRUCCIONES"
+
+BOTONES PRINCIPALES:
+- Procesar Ticket: Hoja OCR_ENTRADA
+- Generar Ruta: Hoja LISTAS_COMPRA
+- Ver Dashboard: Hoja DASHBOARD
+
+SOPORTE:
+Si tienes problemas, ejecuta "solucionar_problemas.bat"

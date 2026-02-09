@@ -1,0 +1,53 @@
+﻿{
+    "Sistema":  {
+                    "FechaInstalacion":  "2026-02-09 11:44:33",
+                    "Idioma":  "es-ES",
+                    "Version":  "3.5.0",
+                    "Modo":  "Normal"
+                },
+    "Usuario":  {
+                    "Nombre":  "Alba",
+                    "Telefono":  "",
+                    "CP":  "",
+                    "Coordenadas":  {
+                                        "Lat":  0,
+                                        "Lon":  0
+                                    },
+                    "Email":  "",
+                    "Ciudad":  "",
+                    "Direccion":  ""
+                },
+    "Seguridad":  {
+                      "MaxIntentosLogin":  3,
+                      "TimeoutMinutos":  30,
+                      "EncriptarDatos":  false,
+                      "HashPasswords":  true
+                  },
+    "Preferencias":  {
+                         "UnidadPeso":  "kg",
+                         "Notificaciones":  true,
+                         "UnidadDistancia":  "km",
+                         "Tema":  "Claro",
+                         "AutoBackup":  true,
+                         "Moneda":  "EUR",
+                         "FormatoFecha":  "dd/MM/yyyy"
+                     },
+    "Rendimiento":  {
+                        "CacheHabilitado":  true,
+                        "LogDetallado":  false,
+                        "MaxCacheMB":  100,
+                        "AutoActualizar":  true
+                    },
+    "Conexiones":  {
+                       "Proxy":  {
+                                     "Habilitado":  false,
+                                     "Puerto":  0,
+                                     "Servidor":  ""
+                                 },
+                       "APIWeather":  "",
+                       "APIMaps":  "",
+                       "APISupermercados":  [
+
+                                            ]
+                   }
+}

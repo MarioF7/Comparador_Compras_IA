@@ -1,0 +1,59 @@
+LICENCIA DE USO - SISTEMA COMPARADOR DE COMPRAS IA
+===================================================
+
+Versi�n del sistema: 3.5.0
+Fecha de instalaci�n: 09/02/2026 11:44:05,49
+Usuario licenciado: Alba
+Equipo: LAPTOP-QL6HA0J3
+
+----------------------------------------------------
+T�RMINOS DE USO Y LICENCIA
+----------------------------------------------------
+
+1. LICENCIA DE USO
+  1.1. Esta licencia permite el uso personal y empresarial.
+  1.2. Se permite la instalaci�n en hasta 3 dispositivos.
+  1.3. No se permite la reventa o distribuci�n comercial.
+
+2. RESPONSABILIDADES DEL USUARIO
+  2.1. El usuario es responsable de la veracidad de los datos.
+  2.2. Debe realizar copias de seguridad regularmente.
+  2.3. Debe mantener el sistema actualizado.
+
+3. LIMITACIONES DE GARANT�A
+  3.1. El software se proporciona "TAL CUAL".
+  3.2. No hay garant�as de funcionamiento ininterrumpido.
+  3.3. El desarrollador no se hace responsable por p�rdidas.
+
+4. PROPIEDAD INTELECTUAL
+  4.1. Todos los derechos de autor son reservados.
+  4.2. El c�digo fuente permanece propiedad del desarrollador.
+  4.3. Se permite la modificaci�n para uso personal.
+
+5. DISTRIBUCI�N
+  5.1. Puede distribuirse libremente manteniendo esta licencia.
+  5.2. Debe incluirse completa la documentaci�n.
+  5.3. No se permite la distribuci�n modificada sin autorizaci�n.
+
+----------------------------------------------------
+ACEPTACI�N DE T�RMINOS
+----------------------------------------------------
+
+Al utilizar este software, usted acepta:
+� Los t�rminos de esta licencia.
+� Las limitaciones de garant�a establecidas.
+� Ser responsable del uso adecuado del sistema.
+
+----------------------------------------------------
+INFORMACI�N DE CONTACTO
+----------------------------------------------------
+
+Para soporte t�cnico o preguntas sobre la licencia:
+� Consulte la documentaci�n incluida.
+� Revise los archivos de log para diagn�stico.
+� Contacte al desarrollador si es necesario.
+
+===================================================
+� 2024 Sistema Comparador de Compras IA v3.5.0
+Todos los derechos reservados.
+===================================================

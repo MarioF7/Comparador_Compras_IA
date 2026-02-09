@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Configuraciones>
+  <Conexiones>
+    <APIs>
+      <GoogleMaps activa="false" clave="" />
+      <OpenWeather activa="false" clave="" />
+      <Supermercados>
+        <API nombre="Mercadona" activa="false" endpoint="" />
+        <API nombre="Carrefour" activa="false" endpoint="" />
+      </Supermercados>
+    </APIs>
+    <Proxy activo="false">
+      <Servidor>
+      </Servidor>
+      <Puerto>0</Puerto>
+      <Usuario>
+      </Usuario>
+      <Password encriptado="">
+      </Password>
+    </Proxy>
+    <BaseDatos>
+      <Local tipo="SQLite" archivo="database.db" />
+      <Remota tipo="None" />
+    </BaseDatos>
+  </Conexiones>
+</Configuraciones>
