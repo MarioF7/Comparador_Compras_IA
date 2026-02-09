@@ -1,1 +1,26 @@
+# Archivos temporales de Windows
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
 
+# Archivos de sistema
+.DS_Store
+.vscode/
+.idea/
+
+# Archivos de Excel temporales
+~$*.xlsm
+~$*.xlsx
+*.xlk
+
+# Logs y backups
+Logs/
+Cache/
+Temp/
+Data_Backup/
+
+# Archivos grandes (si los hay)
+*.zip
+*.rar
+*.7z
