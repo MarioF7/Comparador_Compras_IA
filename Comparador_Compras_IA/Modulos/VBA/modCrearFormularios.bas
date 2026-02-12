@@ -1,0 +1,1012 @@
+Option Explicit
+
+' =============================================
+' MÃ“DULO: modCrearFormularios
+' VERSIÃ“N: 1.0
+' DESCRIPCIÃ“N: Crea dinÃ¡micamente todos los formularios del sistema
+'              SIN necesidad de archivos .frm / .frx
+' =============================================
+
+' -------------------------------------------------
+' PUNTO DE ENTRADA ÃšNICO: Crear todos los formularios
+' -------------------------------------------------
+Public Sub CrearTodosLosFormularios()
+    On Error Resume Next
+    ' Eliminar formularios existentes (para evitar duplicados al reinstalar)
+    Dim vbComp As VBComponent
+    For Each vbComp In ThisWorkbook.VBProject.VBComponents
+        If vbComp.Type = vbext_ct_MSForm Then
+            Select Case vbComp.Name
+                Case "frmAltaProducto", "frmAltaTienda", "frmAltaPrecio", "frmComparar"
+                    ThisWorkbook.VBProject.VBComponents.Remove vbComp
+            End Select
+        End If
+    Next vbComp
+    On Error GoTo 0
+    
+    ' Crear formularios
+    Call CrearFrmAltaProducto
+    Call CrearFrmAltaTienda
+    Call CrearFrmAltaPrecio
+    Call CrearFrmComparar
+    
+    MsgBox "Formularios creados correctamente.", vbInformation, APP_NAME
+End Sub
+
+' ============================================================================
+' FORMULARIO 1: ALTA DE PRODUCTO
+' ============================================================================
+Private Sub CrearFrmAltaProducto()
+    Dim frm As VBComponent
+    Set frm = ThisWorkbook.VBProject.VBComponents.Add(vbext_ct_MSForm)
+    
+    With frm
+        .Name = "frmAltaProducto"
+        .Properties("Caption") = "Alta de Producto"
+        .Properties("Width") = 500
+        .Properties("Height") = 520
+        .Properties("BorderStyle") = 1        ' fmBorderStyleSingle
+        .Properties("ShowModal") = True
+        .Properties("StartUpPosition") = 1    ' Centro del owner
+    End With
+    
+    Dim designer As Object
+    Set designer = frm.designer
+    
+    Dim lbl As Object, txt As Object, cbo As Object, chk As Object, btn As Object
+    Dim yPos As Integer: yPos = 20
+    Const lblW As Integer = 100
+    Const ctrlW As Integer = 280
+    Const ctrlH As Integer = 20
+    Const sep As Integer = 10
+    Const leftMargin As Integer = 20
+    Const ctrlLeft As Integer = 130
+    
+    ' -------------------------------------------------
+    ' 1. Nombre
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Nombre:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtNombre"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 2. CategorÃ­a
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "CategorÃ­a:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboCategoria"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2   ' fmStyleDropDownList
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 3. SubcategorÃ­a
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "SubcategorÃ­a:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboSubcategoria"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 4. Marca
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Marca:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtMarca"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 5. DescripciÃ³n (multilÃ­nea)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "DescripciÃ³n:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtDescripcion"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = 60
+    txt.MultiLine = True
+    txt.WordWrap = True
+    yPos = yPos + 60 + sep
+    
+    ' -------------------------------------------------
+    ' 6. Unidad de medida
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Unidad:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboUnidad"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    ' AÃ±adir opciones
+    cbo.AddItem "kg"
+    cbo.AddItem "litro"
+    cbo.AddItem "unidad"
+    cbo.AddItem "paquete"
+    cbo.AddItem "gramo"
+    cbo.AddItem "mililitro"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 7. EAN / UPC
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "EAN/UPC:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtEAN"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 8. Activo (CheckBox)
+    ' -------------------------------------------------
+    Set chk = designer.Controls.Add("Forms.CheckBox.1")
+    chk.Name = "chkActivo"
+    chk.Caption = "Producto activo"
+    chk.Left = ctrlLeft: chk.Top = yPos: chk.Width = 150: chk.Height = ctrlH
+    chk.Value = True
+    yPos = yPos + ctrlH + sep * 2
+    
+    ' -------------------------------------------------
+    ' 9. Botones Guardar / Cancelar
+    ' -------------------------------------------------
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdGuardar"
+    btn.Caption = "Guardar"
+    btn.Left = ctrlLeft: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    btn.Font.Bold = True
+    
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdCancelar"
+    btn.Caption = "Cancelar"
+    btn.Left = ctrlLeft + 120: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    
+    ' =============================================
+    ' CÃ“DIGO DEL FORMULARIO (EVENTOS)
+    ' =============================================
+    Dim code As String
+    ' BLOQUE 1: Configuración inicial y Form_Initialize
+    code = "Option Explicit" & vbCrLf & vbCrLf & _
+        "Private Sub UserForm_Initialize()" & vbCrLf & _
+        "    Dim ws As Worksheet, dict As Object, i As Long, valor As String" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_PRODUCTOS & """)" & vbCrLf & _
+        "    Set dict = CreateObject(""Scripting.Dictionary"")" & vbCrLf & _
+        "    Dim colCat As Long: colCat = ObtenerColumna(ws, ""Categoría"")" & vbCrLf & _
+        "    For i = 2 To ws.Cells(ws.Rows.Count, colCat).End(xlUp).Row" & vbCrLf & _
+        "        valor = Trim(ws.Cells(i, colCat).Value)" & vbCrLf & _
+        "        If valor <> """" And Not dict.Exists(valor) Then" & vbCrLf & _
+        "            dict.Add valor, valor" & vbCrLf & _
+        "            Me.cboCategoria.AddItem valor" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "    Me.chkActivo.Value = True" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    ' BLOQUE 2: Cambio de Categoría
+    code = code & vbCrLf & "Private Sub cboCategoria_Change()" & vbCrLf & _
+        "    Me.cboSubcategoria.Clear" & vbCrLf & _
+        "    If Me.cboCategoria.Value = """" Then Exit Sub" & vbCrLf & _
+        "    Dim ws As Worksheet, dict As Object, i As Long, valor As String" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_PRODUCTOS & """)" & vbCrLf & _
+        "    Set dict = CreateObject(""Scripting.Dictionary"")" & vbCrLf & _
+        "    Dim colCat As Long: colCat = ObtenerColumna(ws, ""Categoría"")" & vbCrLf & _
+        "    Dim colSub As Long: colSub = ObtenerColumna(ws, ""Subcategoría"")" & vbCrLf & _
+        "    For i = 2 To ws.Cells(ws.Rows.Count, colCat).End(xlUp).Row" & vbCrLf & _
+        "        If Trim(ws.Cells(i, colCat).Value) = Trim(Me.cboCategoria.Value) Then" & vbCrLf & _
+        "            valor = Trim(ws.Cells(i, colSub).Value)" & vbCrLf & _
+        "            If valor <> """" And Not dict.Exists(valor) Then" & vbCrLf & _
+        "                dict.Add valor, valor" & vbCrLf & _
+        "                Me.cboSubcategoria.AddItem valor" & vbCrLf & _
+        "            End If" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    ' BLOQUE 3: Guardar - Validaciones
+    code = code & vbCrLf & "Private Sub cmdGuardar_Click()" & vbCrLf & _
+        "    If Trim(Me.txtNombre.Value) = """" Then" & vbCrLf & _
+        "        MsgBox ""El nombre del producto es obligatorio."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.txtNombre.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Me.cboCategoria.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Debe seleccionar una categoría."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.cboCategoria.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Me.cboUnidad.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Seleccione una unidad de medida."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.cboUnidad.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf
+
+    ' BLOQUE 4: Guardar - Escritura en Hoja
+    code = code & "    Dim ws As Worksheet, ultFila As Long" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_PRODUCTOS & """)" & vbCrLf & _
+        "    ultFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row + 1" & vbCrLf & _
+        "    ws.Cells(ultFila, 1).Value = GenerarNuevoID(""" & SHEET_PRODUCTOS & """, """ & ID_PREFIX_PRODUCTO & """)" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Nombre"")).Value = Me.txtNombre.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Categoría"")).Value = Me.cboCategoria.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Subcategoría"")).Value = Me.cboSubcategoria.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Marca"")).Value = Me.txtMarca.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Descripción"")).Value = Me.txtDescripcion.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Unidad_Medida"")).Value = Me.cboUnidad.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""UPC/EAN"")).Value = Me.txtEAN.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Fecha_Alta"")).Value = Date" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Activo"")).Value = IIf(Me.chkActivo.Value, 1, 0)" & vbCrLf & _
+        "    MsgBox ""Producto guardado correctamente."", vbInformation, APP_NAME" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub" & vbCrLf & vbCrLf & _
+        "Private Sub cmdCancelar_Click()" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub"
+    
+    frm.CodeModule.AddFromString code
+End Sub
+
+' ============================================================================
+' FORMULARIO 2: ALTA DE TIENDA
+' ============================================================================
+Private Sub CrearFrmAltaTienda()
+    Dim frm As VBComponent
+    Set frm = ThisWorkbook.VBProject.VBComponents.Add(vbext_ct_MSForm)
+    
+    With frm
+        .Name = "frmAltaTienda"
+        .Properties("Caption") = "Alta de Tienda"
+        .Properties("Width") = 550
+        .Properties("Height") = 580
+        .Properties("BorderStyle") = 1
+        .Properties("ShowModal") = True
+        .Properties("StartUpPosition") = 1
+    End With
+    
+    Dim designer As Object
+    Set designer = frm.designer
+    
+    Dim lbl As Object, txt As Object, cbo As Object, chk As Object, btn As Object
+    Dim yPos As Integer: yPos = 20
+    Const lblW As Integer = 120
+    Const ctrlW As Integer = 300
+    Const ctrlH As Integer = 20
+    Const sep As Integer = 10
+    Const leftMargin As Integer = 20
+    Const ctrlLeft As Integer = 150
+    
+    ' -------------------------------------------------
+    ' 1. Nombre de la tienda
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Nombre Tienda:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtNombreTienda"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 2. Cadena
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Cadena:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboCadena"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    ' AÃ±adir opciones comunes
+    cbo.AddItem "Mercadona"
+    cbo.AddItem "Carrefour"
+    cbo.AddItem "DÃ­a"
+    cbo.AddItem "Alcampo"
+    cbo.AddItem "Lidl"
+    cbo.AddItem "Aldi"
+    cbo.AddItem "Eroski"
+    cbo.AddItem "Hipercor"
+    cbo.AddItem "El Corte InglÃ©s"
+    cbo.AddItem "Consum"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 3. DirecciÃ³n
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "DirecciÃ³n:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtDireccion"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 4. Ciudad
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Ciudad:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtCiudad"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 5. CÃ³digo Postal
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "CÃ³digo Postal:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtCP"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 100: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 6. Provincia
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Provincia:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtProvincia"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 7. TelÃ©fono
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "TelÃ©fono:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtTelefono"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 8. Email
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Email:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtEmail"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 9. Web
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Web:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtWeb"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 10. Horario
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Horario:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtHorario"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = ctrlW: txt.Height = ctrlH
+    txt.Text = "09:00-21:00"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 11. Tipo de tienda
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Tipo Tienda:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboTipoTienda"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    cbo.AddItem "Supermercado"
+    cbo.AddItem "Hipermercado"
+    cbo.AddItem "Tienda de conveniencia"
+    cbo.AddItem "Tienda online"
+    cbo.AddItem "Otros"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 12. ValoraciÃ³n media
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "ValoraciÃ³n media:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtValoracion"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 60: txt.Height = ctrlH
+    txt.Text = "4.0"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 13. Distancia al usuario (km)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Distancia (km):"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtDistancia"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 80: txt.Height = ctrlH
+    txt.Text = "0.0"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 14. Activo
+    ' -------------------------------------------------
+    Set chk = designer.Controls.Add("Forms.CheckBox.1")
+    chk.Name = "chkActivo"
+    chk.Caption = "Tienda activa"
+    chk.Left = ctrlLeft: chk.Top = yPos: chk.Width = 150: chk.Height = ctrlH
+    chk.Value = True
+    yPos = yPos + ctrlH + sep * 2
+    
+    ' -------------------------------------------------
+    ' 15. Botones Guardar / Cancelar
+    ' -------------------------------------------------
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdGuardar"
+    btn.Caption = "Guardar"
+    btn.Left = ctrlLeft: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    btn.Font.Bold = True
+    
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdCancelar"
+    btn.Caption = "Cancelar"
+    btn.Left = ctrlLeft + 120: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    
+    ' =============================================
+    ' CÃ“DIGO DEL FORMULARIO
+    ' =============================================
+    Dim code As String
+    ' BLOQUE 1: Configuración y Validaciones
+    code = "Option Explicit" & vbCrLf & vbCrLf & _
+        "Private Sub cmdGuardar_Click()" & vbCrLf & _
+        "    ' --- Validaciones ---" & vbCrLf & _
+        "    If Trim(Me.txtNombreTienda.Value) = """" Then" & vbCrLf & _
+        "        MsgBox ""El nombre de la tienda es obligatorio."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.txtNombreTienda.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Me.cboCadena.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Seleccione una cadena."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.cboCadena.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Not IsNumeric(Me.txtValoracion.Value) Or Me.txtValoracion.Value < 0 Or Me.txtValoracion.Value > 5 Then" & vbCrLf & _
+        "        MsgBox ""La valoración debe ser un número entre 0 y 5."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.txtValoracion.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Not IsNumeric(Me.txtDistancia.Value) Or Me.txtDistancia.Value < 0 Then" & vbCrLf & _
+        "        MsgBox ""La distancia debe ser un número positivo."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.txtDistancia.SetFocus" & vbCrLf & _
+        "        Exit Sub" & vbCrLf & _
+        "    End If"
+
+    ' BLOQUE 2: Guardado en hoja y otros eventos
+    code = code & vbCrLf & "    ' --- Guardar en hoja TIENDAS ---" & vbCrLf & _
+        "    Dim ws As Worksheet, ultFila As Long" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_TIENDAS & """)" & vbCrLf & _
+        "    ultFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row + 1" & vbCrLf & _
+        "    ws.Cells(ultFila, 1).Value = GenerarNuevoID(""" & SHEET_TIENDAS & """, """ & ID_PREFIX_TIENDA & """)" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Nombre_Tienda"")).Value = Me.txtNombreTienda.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Cadena"")).Value = Me.cboCadena.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Dirección"")).Value = Me.txtDireccion.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Ciudad"")).Value = Me.txtCiudad.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""CP"")).Value = Me.txtCP.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Provincia"")).Value = Me.txtProvincia.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Teléfono"")).Value = Me.txtTelefono.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Email"")).Value = Me.txtEmail.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Web"")).Value = Me.txtWeb.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Horario"")).Value = Me.txtHorario.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Tipo_Tienda"")).Value = Me.cboTipoTienda.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Valoracion_Media"")).Value = Me.txtValoracion.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Distancia_Usuario"")).Value = Me.txtDistancia.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Activo"")).Value = IIf(Me.chkActivo.Value, 1, 0)" & vbCrLf & _
+        "    MsgBox ""Tienda guardada correctamente."", vbInformation, APP_NAME" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub" & vbCrLf & vbCrLf & _
+        "Private Sub cmdCancelar_Click()" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub"
+
+    frm.CodeModule.AddFromString code
+End Sub
+
+' ============================================================================
+' FORMULARIO 3: ALTA DE PRECIO
+' ============================================================================
+Private Sub CrearFrmAltaPrecio()
+    Dim frm As VBComponent
+    Set frm = ThisWorkbook.VBProject.VBComponents.Add(vbext_ct_MSForm)
+    
+    With frm
+        .Name = "frmAltaPrecio"
+        .Properties("Caption") = "Registrar Precio"
+        .Properties("Width") = 550
+        .Properties("Height") = 500
+        .Properties("BorderStyle") = 1
+        .Properties("ShowModal") = True
+        .Properties("StartUpPosition") = 1
+    End With
+    
+    Dim designer As Object
+    Set designer = frm.designer
+    
+    Dim lbl As Object, txt As Object, cbo As Object, chk As Object, btn As Object
+    Dim yPos As Integer: yPos = 20
+    Const lblW As Integer = 120
+    Const ctrlW As Integer = 300
+    Const ctrlH As Integer = 20
+    Const sep As Integer = 10
+    Const leftMargin As Integer = 20
+    Const ctrlLeft As Integer = 150
+    
+    ' -------------------------------------------------
+    ' 1. Producto
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Producto:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboProducto"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 2. Tienda
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Tienda:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboTienda"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 3. Precio Unitario
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Precio (â‚¬):"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtPrecio"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 100: txt.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 4. Unidad de medida
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Unidad:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboUnidad"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = 100: cbo.Height = ctrlH
+    cbo.Style = 2
+    cbo.AddItem "unidad"
+    cbo.AddItem "kg"
+    cbo.AddItem "litro"
+    cbo.AddItem "paquete"
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 5. Oferta?
+    ' -------------------------------------------------
+    Set chk = designer.Controls.Add("Forms.CheckBox.1")
+    chk.Name = "chkOferta"
+    chk.Caption = "Â¿Es una oferta?"
+    chk.Left = ctrlLeft: chk.Top = yPos: chk.Width = 150: chk.Height = ctrlH
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 6. Precio original (si oferta)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Precio original:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtPrecioOriginal"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 100: txt.Height = ctrlH
+    txt.Enabled = False
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 7. Fecha fin oferta
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "VÃ¡lido hasta:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    ' Usamos un TextBox para fecha simple (mejorarÃ­a con DatePicker si hay controles)
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtFechaFin"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 100: txt.Height = ctrlH
+    txt.Enabled = False
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 8. Stock
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Stock:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboStock"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = 100: cbo.Height = ctrlH
+    cbo.Style = 2
+    cbo.AddItem "Alto"
+    cbo.AddItem "Medio"
+    cbo.AddItem "Bajo"
+    cbo.AddItem "Agotado"
+    yPos = yPos + ctrlH + sep * 2
+    
+    ' -------------------------------------------------
+    ' 9. Botones Guardar / Cancelar
+    ' -------------------------------------------------
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdGuardar"
+    btn.Caption = "Guardar"
+    btn.Left = ctrlLeft: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    btn.Font.Bold = True
+    
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdCancelar"
+    btn.Caption = "Cancelar"
+    btn.Left = ctrlLeft + 120: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    
+    ' =============================================
+    ' CÃ“DIGO DEL FORMULARIO
+    ' =============================================
+    Dim code As String
+    ' BLOQUE 1: Inicio y Carga de Productos
+    code = "Option Explicit" & vbCrLf & vbCrLf & _
+        "Private Sub UserForm_Initialize()" & vbCrLf & _
+        "    Dim wsProd As Worksheet, i As Long, idProd As String, nomProd As String" & vbCrLf & _
+        "    Set wsProd = ThisWorkbook.Worksheets(""" & SHEET_PRODUCTOS & """)" & vbCrLf & _
+        "    Dim colID As Long: colID = ObtenerColumna(wsProd, ""ProductID"")" & vbCrLf & _
+        "    Dim colNom As Long: colNom = ObtenerColumna(wsProd, ""Nombre"")" & vbCrLf & _
+        "    Dim colAct As Long: colAct = ObtenerColumna(wsProd, ""Activo"")" & vbCrLf & _
+        "    For i = 2 To wsProd.Cells(wsProd.Rows.Count, colID).End(xlUp).Row" & vbCrLf & _
+        "        If wsProd.Cells(i, colAct).Value = 1 Then" & vbCrLf & _
+        "            idProd = wsProd.Cells(i, colID).Value" & vbCrLf & _
+        "            nomProd = wsProd.Cells(i, colNom).Value" & vbCrLf & _
+        "            Me.cboProducto.AddItem idProd & "" - "" & nomProd" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf
+
+    ' BLOQUE 2: Carga de Tiendas y Otros Eventos
+    code = code & "    Dim wsTnd As Worksheet" & vbCrLf & _
+        "    Set wsTnd = ThisWorkbook.Worksheets(""" & SHEET_TIENDAS & """)" & vbCrLf & _
+        "    colID = ObtenerColumna(wsTnd, ""StoreID"")" & vbCrLf & _
+        "    colNom = ObtenerColumna(wsTnd, ""Nombre_Tienda"")" & vbCrLf & _
+        "    colAct = ObtenerColumna(wsTnd, ""Activo"")" & vbCrLf & _
+        "    For i = 2 To wsTnd.Cells(wsTnd.Rows.Count, colID).End(xlUp).Row" & vbCrLf & _
+        "        If wsTnd.Cells(i, colAct).Value = 1 Then" & vbCrLf & _
+        "            idProd = wsTnd.Cells(i, colID).Value" & vbCrLf & _
+        "            nomProd = wsTnd.Cells(i, colNom).Value" & vbCrLf & _
+        "            Me.cboTienda.AddItem idProd & "" - "" & nomProd" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "    Me.cboUnidad.Value = ""unidad""" & vbCrLf & _
+        "    Me.cboStock.Value = ""Medio""" & vbCrLf & _
+        "End Sub" & vbCrLf & vbCrLf & _
+        "Private Sub chkOferta_Click()" & vbCrLf & _
+        "    Me.txtPrecioOriginal.Enabled = Me.chkOferta.Value" & vbCrLf & _
+        "    Me.txtFechaFin.Enabled = Me.chkOferta.Value" & vbCrLf & _
+        "    If Not Me.chkOferta.Value Then" & vbCrLf & _
+        "        Me.txtPrecioOriginal.Value = """"" & vbCrLf & _
+        "        Me.txtFechaFin.Value = """"" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    ' BLOQUE 3: Validaciones de Guardado
+    code = code & vbCrLf & "Private Sub cmdGuardar_Click()" & vbCrLf & _
+        "    If Me.cboProducto.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Seleccione un producto."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.cboProducto.SetFocus: Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Me.cboTienda.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Seleccione una tienda."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.cboTienda.SetFocus: Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    If Not IsNumeric(Me.txtPrecio.Value) Or Me.txtPrecio.Value <= 0 Then" & vbCrLf & _
+        "        MsgBox ""El precio debe ser un número positivo."", vbExclamation, APP_NAME" & vbCrLf & _
+        "        Me.txtPrecio.SetFocus: Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf
+
+    ' BLOQUE 4: Escritura en Hoja PRECIOS y Cierre
+    code = code & "    Dim productID As String, storeID As String" & vbCrLf & _
+        "    productID = Split(Me.cboProducto.Value, "" - "")(0)" & vbCrLf & _
+        "    storeID = Split(Me.cboTienda.Value, "" - "")(0)" & vbCrLf & _
+        "    Dim ws As Worksheet, ultFila As Long" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_PRECIOS & """)" & vbCrLf & _
+        "    ultFila = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row + 1" & vbCrLf & _
+        "    ws.Cells(ultFila, 1).Value = GenerarNuevoID(""" & SHEET_PRECIOS & """, """ & ID_PREFIX_PRECIO & """)" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""ProductID"")).Value = productID" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""StoreID"")).Value = storeID" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Precio_Unitario"")).Value = Me.txtPrecio.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Unidad_Medida"")).Value = Me.cboUnidad.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Oferta"")).Value = IIf(Me.chkOferta.Value, 1, 0)" & vbCrLf & _
+        "    If Me.chkOferta.Value Then" & vbCrLf & _
+        "        ws.Cells(ultFila, ObtenerColumna(ws, ""Precio_Original"")).Value = Me.txtPrecioOriginal.Value" & vbCrLf & _
+        "        ws.Cells(ultFila, ObtenerColumna(ws, ""Fecha_Fin_Oferta"")).Value = Me.txtFechaFin.Value" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Stock"")).Value = Me.cboStock.Value" & vbCrLf & _
+        "    ws.Cells(ultFila, ObtenerColumna(ws, ""Fecha_Actualización"")).Value = Now" & vbCrLf & _
+        "    MsgBox ""Precio registrado correctamente."", vbInformation, APP_NAME" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub" & vbCrLf & vbCrLf & _
+        "Private Sub cmdCancelar_Click()" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub"
+    
+    frm.CodeModule.AddFromString code
+End Sub
+
+' ============================================================================
+' FORMULARIO 4: COMPARADOR DE PRECIOS
+' ============================================================================
+Private Sub CrearFrmComparar()
+    Dim frm As VBComponent
+    Set frm = ThisWorkbook.VBProject.VBComponents.Add(vbext_ct_MSForm)
+    
+    With frm
+        .Name = "frmComparar"
+        .Properties("Caption") = "Comparador de Precios"
+        .Properties("Width") = 700
+        .Properties("Height") = 550
+        .Properties("BorderStyle") = 1
+        .Properties("ShowModal") = True
+        .Properties("StartUpPosition") = 1
+    End With
+    
+    Dim designer As Object
+    Set designer = frm.designer
+    
+    Dim lbl As Object, txt As Object, cbo As Object, btn As Object, lst As Object
+    Dim yPos As Integer: yPos = 20
+    Const lblW As Integer = 120
+    Const ctrlW As Integer = 300
+    Const ctrlH As Integer = 20
+    Const sep As Integer = 10
+    Const leftMargin As Integer = 20
+    Const ctrlLeft As Integer = 150
+    
+    ' -------------------------------------------------
+    ' 1. Usuario (para multi-usuario)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Usuario:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboUsuario"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = 200: cbo.Height = ctrlH
+    cbo.Style = 2
+    yPos = yPos + ctrlH + sep
+    
+    ' -------------------------------------------------
+    ' 2. SelecciÃ³n de producto a comparar
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Producto:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Width = lblW: lbl.Height = ctrlH
+    
+    Set cbo = designer.Controls.Add("Forms.ComboBox.1")
+    cbo.Name = "cboProducto"
+    cbo.Left = ctrlLeft: cbo.Top = yPos: cbo.Width = ctrlW: cbo.Height = ctrlH
+    cbo.Style = 2
+    yPos = yPos + ctrlH + sep * 2
+    
+    ' -------------------------------------------------
+    ' 3. Pesos personalizables (sliders o inputs)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "PonderaciÃ³n:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Font.Bold = True
+    yPos = yPos + ctrlH
+    
+    ' Precio
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Precio:"
+    lbl.Left = leftMargin + 20: lbl.Top = yPos: lbl.Width = 50: lbl.Height = ctrlH
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtPesoPrecio"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 50: txt.Height = ctrlH
+    txt.Text = DEFAULT_WEIGHT_PRICE
+    yPos = yPos + ctrlH + sep
+    
+    ' Distancia
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Distancia:"
+    lbl.Left = leftMargin + 20: lbl.Top = yPos: lbl.Width = 60: lbl.Height = ctrlH
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtPesoDistancia"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 50: txt.Height = ctrlH
+    txt.Text = DEFAULT_WEIGHT_DISTANCE
+    yPos = yPos + ctrlH + sep
+    
+    ' ValoraciÃ³n
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "ValoraciÃ³n:"
+    lbl.Left = leftMargin + 20: lbl.Top = yPos: lbl.Width = 60: lbl.Height = ctrlH
+    Set txt = designer.Controls.Add("Forms.TextBox.1")
+    txt.Name = "txtPesoValoracion"
+    txt.Left = ctrlLeft: txt.Top = yPos: txt.Width = 50: txt.Height = ctrlH
+    txt.Text = DEFAULT_WEIGHT_RATING
+    yPos = yPos + ctrlH + sep * 2
+    
+    ' -------------------------------------------------
+    ' 4. BotÃ³n Calcular
+    ' -------------------------------------------------
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdCalcular"
+    btn.Caption = "Generar Comparativa"
+    btn.Left = ctrlLeft: btn.Top = yPos: btn.Width = 150: btn.Height = 30
+    btn.Font.Bold = True
+    yPos = yPos + 40
+    
+    ' -------------------------------------------------
+    ' 5. Lista / Cuadro de resultados (usamos ListBox)
+    ' -------------------------------------------------
+    Set lbl = designer.Controls.Add("Forms.Label.1")
+    lbl.Caption = "Resultados de la comparaciÃ³n:"
+    lbl.Left = leftMargin: lbl.Top = yPos: lbl.Font.Bold = True
+    yPos = yPos + 25
+    
+    Set lst = designer.Controls.Add("Forms.ListBox.1")
+    lst.Name = "lstResultados"
+    lst.Left = leftMargin: lst.Top = yPos: lst.Width = 620: lst.Height = 200
+    lst.ColumnCount = 5
+    lst.ColumnWidths = "150;100;80;100;120"
+    
+    yPos = yPos + 210
+    
+    ' -------------------------------------------------
+    ' 6. BotÃ³n Cerrar
+    ' -------------------------------------------------
+    Set btn = designer.Controls.Add("Forms.CommandButton.1")
+    btn.Name = "cmdCerrar"
+    btn.Caption = "Cerrar"
+    btn.Left = 550: btn.Top = yPos: btn.Width = 100: btn.Height = 30
+    
+    ' =============================================
+    ' CÃ“DIGO DEL FORMULARIO
+    ' =============================================
+    Dim code As String
+    ' BLOQUE 1: Inicio y Carga de Usuarios
+    code = "Option Explicit" & vbCrLf & vbCrLf & _
+        "Private Sub UserForm_Initialize()" & vbCrLf & _
+        "    Dim ws As Worksheet, i As Long, idUser As String, nomUser As String" & vbCrLf & _
+        "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_USUARIOS & """)" & vbCrLf & _
+        "    Dim colID As Long: colID = ObtenerColumna(ws, ""UserID"")" & vbCrLf & _
+        "    Dim colNom As Long: colNom = ObtenerColumna(ws, ""Nombre"")" & vbCrLf & _
+        "    Dim colAct As Long: colAct = ObtenerColumna(ws, ""Activo"")" & vbCrLf & _
+        "    For i = 2 To ws.Cells(ws.Rows.Count, colID).End(xlUp).Row" & vbCrLf & _
+        "        If ws.Cells(i, colAct).Value = 1 Then" & vbCrLf & _
+        "            idUser = ws.Cells(i, colID).Value" & vbCrLf & _
+        "            nomUser = ws.Cells(i, colNom).Value" & vbCrLf & _
+        "            Me.cboUsuario.AddItem idUser & "" - "" & nomUser" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "    If Me.cboUsuario.ListCount > 0 Then Me.cboUsuario.ListIndex = 0" & vbCrLf
+
+    ' BLOQUE 2: Carga de Productos
+    code = code & "    Set ws = ThisWorkbook.Worksheets(""" & SHEET_PRODUCTOS & """)" & vbCrLf & _
+        "    colID = ObtenerColumna(ws, ""ProductID"")" & vbCrLf & _
+        "    colNom = ObtenerColumna(ws, ""Nombre"")" & vbCrLf & _
+        "    colAct = ObtenerColumna(ws, ""Activo"")" & vbCrLf & _
+        "    For i = 2 To ws.Cells(ws.Rows.Count, colID).End(xlUp).Row" & vbCrLf & _
+        "        If ws.Cells(i, colAct).Value = 1 Then" & vbCrLf & _
+        "            idUser = ws.Cells(i, colID).Value" & vbCrLf & _
+        "            nomUser = ws.Cells(i, colNom).Value" & vbCrLf & _
+        "            Me.cboProducto.AddItem idUser & "" - "" & nomUser" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    ' BLOQUE 3: Calcular - Validaciones y Pesos
+    code = code & vbCrLf & "Private Sub cmdCalcular_Click()" & vbCrLf & _
+        "    If Me.cboUsuario.Value = """" Or Me.cboProducto.Value = """" Then" & vbCrLf & _
+        "        MsgBox ""Seleccione usuario y producto."", vbExclamation, APP_NAME: Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    Dim wP As Double, wD As Double, wV As Double" & vbCrLf & _
+        "    wP = IIf(Not IsNumeric(Me.txtPesoPrecio.Value), DEFAULT_WEIGHT_PRICE, Val(Me.txtPesoPrecio.Value))" & vbCrLf & _
+        "    wD = IIf(Not IsNumeric(Me.txtPesoDistancia.Value), DEFAULT_WEIGHT_DISTANCE, Val(Me.txtPesoDistancia.Value))" & vbCrLf & _
+        "    wV = IIf(Not IsNumeric(Me.txtPesoValoracion.Value), DEFAULT_WEIGHT_RATING, Val(Me.txtPesoValoracion.Value))" & vbCrLf & _
+        "    If Abs((wP + wD + wV) - 1) > 0.001 Then" & vbCrLf & _
+        "        MsgBox ""Los pesos deben sumar 1."", vbExclamation, APP_NAME: Exit Sub" & vbCrLf & _
+        "    End If" & vbCrLf & _
+        "    Dim productID As String: productID = Split(Me.cboProducto.Value, "" - "")(0)" & vbCrLf & _
+        "    Me.lstResultados.Clear" & vbCrLf
+
+    ' BLOQUE 4: Lógica de Búsqueda de Precios y Tiendas
+    code = code & "    Dim wsP As Worksheet, wsT As Worksheet, i As Long, j As Long" & vbCrLf & _
+        "    Dim precio As Double, distancia As Double, valoracion As Double, puntuacion As Double" & vbCrLf & _
+        "    Set wsP = ThisWorkbook.Worksheets(""" & SHEET_PRECIOS & """)" & vbCrLf & _
+        "    Set wsT = ThisWorkbook.Worksheets(""" & SHEET_TIENDAS & """)" & vbCrLf & _
+        "    Dim colProdID As Long: colProdID = ObtenerColumna(wsP, ""ProductID"")" & vbCrLf & _
+        "    Dim colStoreID As Long: colStoreID = ObtenerColumna(wsP, ""StoreID"")" & vbCrLf & _
+        "    Dim colPrecio As Long: colPrecio = ObtenerColumna(wsP, ""Precio_Unitario"")" & vbCrLf & _
+        "    Dim colTID As Long: colTID = ObtenerColumna(wsT, ""StoreID"")" & vbCrLf & _
+        "    Dim colTNom As Long: colTNom = ObtenerColumna(wsT, ""Nombre_Tienda"")" & vbCrLf & _
+        "    Dim colTDist As Long: colTDist = ObtenerColumna(wsT, ""Distancia_Usuario"")" & vbCrLf & _
+        "    Dim colTVal As Long: colTVal = ObtenerColumna(wsT, ""Valoracion_Media"")" & vbCrLf
+
+    ' BLOQUE 5: Bucle Final y Cierre
+    code = code & "    For i = 2 To wsP.Cells(wsP.Rows.Count, colProdID).End(xlUp).Row" & vbCrLf & _
+        "        If wsP.Cells(i, colProdID).Value = productID Then" & vbCrLf & _
+        "            precio = wsP.Cells(i, colPrecio).Value" & vbCrLf & _
+        "            For j = 2 To wsT.Cells(wsT.Rows.Count, colTID).End(xlUp).Row" & vbCrLf & _
+        "                If wsT.Cells(j, colTID).Value = wsP.Cells(i, colStoreID).Value Then" & vbCrLf & _
+        "                    distancia = wsT.Cells(j, colTDist).Value: valoracion = wsT.Cells(j, colTVal).Value" & vbCrLf & _
+        "                    puntuacion = ((5 - precio) * wP + (10 - distancia) * wD + valoracion * wV) / 5" & vbCrLf & _
+        "                    Me.lstResultados.AddItem: Dim idx As Long: idx = Me.lstResultados.ListCount - 1" & vbCrLf & _
+        "                    Me.lstResultados.List(idx, 0) = wsT.Cells(j, colTNom).Value" & vbCrLf & _
+        "                    Me.lstResultados.List(idx, 1) = Format(precio, ""0.00 €"")" & vbCrLf & _
+        "                    Me.lstResultados.List(idx, 2) = distancia & "" km""" & vbCrLf & _
+        "                    Me.lstResultados.List(idx, 3) = Format(valoracion, ""0.0"")" & vbCrLf & _
+        "                    Me.lstResultados.List(idx, 4) = Format(puntuacion, ""0.00"")" & vbCrLf & _
+        "                    Exit For" & vbCrLf & _
+        "                End If" & vbCrLf & _
+        "            Next j" & vbCrLf & _
+        "        End If" & vbCrLf & _
+        "    Next i" & vbCrLf & _
+        "End Sub" & vbCrLf & vbCrLf & _
+        "Private Sub cmdCerrar_Click()" & vbCrLf & _
+        "    Unload Me" & vbCrLf & _
+        "End Sub"
+    
+    frm.CodeModule.AddFromString code
+End Sub

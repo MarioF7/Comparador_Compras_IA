@@ -1,31 +1,43 @@
 ```batch
 @echo off
 chcp 65001 >nul
-title [INSTALADOR] Sistema Comparador de Compras Inteligente IA v3.5
+title [INSTALADOR] Sistema Comparador de Compras IA v3.5
 setlocal enabledelayedexpansion
 
-echo ===================================================
-echo    SISTEMA COMPARADOR DE COMPRAS INTELIGENTE IA
-echo    Versión: 3.5.0 - Edición Empresarial
-echo ===================================================
-echo.
+:: ======================= CONFIGURACIÓN PRINCIPAL =======================
+set "VER_SISTEMA=3.5.0"
+set "NOMBRE_SISTEMA=Sistema Comparador de Compras Inteligente IA"
+set "AUTOR=MarioF7"
 
-:: ===================================================================
-:: CONFIGURACIÓN INICIAL Y VARIABLES MEJORADA
-:: ===================================================================
-set "SCRIPT_VERSION=3.5.0"
-set "FECHA_INSTALACION=%date% %time%"
+:: Directorios PRINCIPALES (NO modificar rutas internas aquí)
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%..\Comparador_Compras_IA"
-set "LOG_FILE=%PROJECT_ROOT%\Logs\instalacion_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log"
 
-:: Variables de control mejoradas
-set "ERROR_FLAG=0"
-set "WARNING_FLAG=0"
-set "ADMIN_MODE=0"
+:: Configuración de logs
+set "LOG_DIR=%PROJECT_ROOT%\Logs"
+set "LOG_FILE=%LOG_DIR%\instalacion_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.log"
+
+:: Variables de estado del sistema
+set /a ERROR_FLAG=0
+set /a WARNING_FLAG=0
+set /a ADMIN_MODE=0
+set /a PHASE=0
 set "EXCEL_INSTALLED=0"
 set "POWERSHELL_VERSION=0"
 set "NET_VERSION=0"
+
+:: ======================= INICIO DEL PROGRAMA =======================
+echo.
+echo ===================================================
+echo    %NOMBRE_SISTEMA%
+echo    Version: %VER_SISTEMA% - Release Estable
+echo ===================================================
+echo.
+echo Fecha  : %date% %time%
+echo Usuario: %USERNAME%
+echo Equipo : %COMPUTERNAME%
+echo ===================================================
+echo.
 
 :: ===================================================================
 :: CREAR ESTRUCTURA DE LOGS MEJORADA
@@ -751,7 +763,7 @@ if %errorlevel% equ 0 (
 echo.
 echo Ejecutando scripts de configuración...
 
-:: Lista de scripts a ejecutar (AHORA INCLUYE configurar_sistema.ps1)
+:: Lista de scripts a ejecutar 
 set "SCRIPTS=crear_excel.ps1 cargar_datos.ps1 configurar_sistema.ps1"
 
 set "SCRIPT_SUCCESS=0"
@@ -762,6 +774,7 @@ echo [DEBUG] Scripts a ejecutar: !SCRIPTS!
 echo [DEBUG] Directorio de scripts: !SCRIPT_DIR!
 echo [DEBUG] Directorio del proyecto: !PROJECT_ROOT!
 echo [DEBUG] Contenido exacto: %SCRIPTS%
+
 for %%s in (%SCRIPTS%) do (
     set /a SCRIPT_TOTAL+=1
     echo.
@@ -775,16 +788,22 @@ for %%s in (%SCRIPTS%) do (
         
         :: Ejecutar script con timeout y captura de errores
         echo [INFO] Ejecutando PowerShell script...
-        
         :: Crear un archivo temporal para capturar la salida
         set "PS_OUTPUT_FILE=%TEMP%\ps_output_%%s_%time:~0,2%%time:~3,2%%time:~6,2%.txt"
-        
-        :: Ejecutar PowerShell script y capturar salida
-        ::powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!" > "!PS_OUTPUT_FILE!" 2>&1
+		::Ejemplo de como crear bien el if en bash, se supone que usando un call no falla el for
+		::if ["%%s" == "crear_excel.ps1"]; then
+		::
+		::else
+		::
+		::fi
+		:: Ejecutar PowerShell script y capturar salida en modo silent
+		powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!" -Silent > "!PS_OUTPUT_FILE!" 2>&1
+		:: Ejecutar PowerShell script y capturar salida
+		::powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!" > "!PS_OUTPUT_FILE!" 2>&1
 		:: Ejecutar PowerShell script y capturar salida abriendo ventana
-		start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!" > "!PS_OUTPUT_FILE!" 2>&1
+		::start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!" > "!PS_OUTPUT_FILE!" 2>&1
 		:: Ejecutar PowerShell script y sin capturar salida abiendo ventana
-        ::start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!"
+		::start /wait powershell -NoProfile -ExecutionPolicy Bypass -File "!SCRIPT_DIR!\%%s" -ProjectPath "!PROJECT_ROOT!"
 		set "SCRIPT_EXITCODE=!errorlevel!"
         
         :: Mostrar las primeras líneas de la salida
@@ -1529,4 +1548,5 @@ echo ===================================================
 echo.
 echo ¡Gracias por instalar el Sistema Comparador de Compras IA v!SCRIPT_VERSION!!
 
-set /p CONTINUAR="Presione una tecla para terminar... "
+echo "Presione una tecla para terminar... "
+pause >nul

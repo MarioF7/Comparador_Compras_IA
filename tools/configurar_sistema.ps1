@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory=$false)]
-    [string]$ProjectPath = (Split-Path -Parent $MyInvocation.MyCommand.Path) + "\..\Comparador_Compras_IA",
+    [string]$ProjectPath = (Split-Path -Parent $MyInvocation.MyCommand.Path) + "\..\Comparador_Compras_IA\",
     
     [Parameter(Mandatory=$false)]
     [switch]$Silent = $false

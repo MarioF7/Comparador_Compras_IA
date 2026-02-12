@@ -7,7 +7,7 @@
                                             "RequerirMayusculas":  true
                                         },
                       "Encriptacion":  {
-                                           "Salt":  "hGBsvI7L4rzAmsnVy0W6MaP4nEbLFfDH3DW9yeJCI90=",
+                                           "Salt":  "2JsMDjWU3Ts/4YEEv421rzKtHHnxhJhEx4EHARXNtWY=",
                                            "Algoritmo":  "AES-256"
                                        },
                       "Sesiones":  {

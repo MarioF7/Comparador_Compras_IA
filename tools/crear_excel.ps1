@@ -1,6 +1,9 @@
 ﻿param(
     [Parameter(Mandatory=$false)]
     [string]$ProjectPath,
+	
+	[Parameter(Mandatory=$false)]
+	[string]$VBAModulesPath = (Split-Path -Parent $MyInvocation.MyCommand.Path) + "\Modulos_VBA",
     
     [Parameter(Mandatory=$false)]
     [switch]$Force,  # Valor por defecto: $false (si no se usa)
@@ -21,7 +24,12 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Si ProjectPath está vacío, calculamos la ruta por defecto aquí abajo
 if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
-    $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ProjectPath = (Split-Path -Parent $MyInvocation.MyCommand.Path) + "\..\Comparador_Compras_IA\"
+}
+
+# Si VBAModulesPath está vacío, calculamos la ruta por defecto aquí abajo
+if ([string]::IsNullOrWhiteSpace($VBAModulesPath)) {
+    $VBAModulesPath = (Split-Path -Parent $MyInvocation.MyCommand.Path) + "\Modulos_VBA\"
 }
 
 # ===================================================
@@ -319,6 +327,73 @@ function Create-ExcelStructure {
     Write-Host "✓ Estructura de hojas completada" -ForegroundColor Green
 }
 
+# Función para importar archivos de macros y formularios
+function Import-VBAModules {
+    param(
+        [object]$Excel,
+        [object]$Workbook
+    )
+    
+    Write-Host "`n[VBA] Preparando módulos VBA..." -ForegroundColor Cyan
+    
+	
+	$vbaSource = Join-Path $PSScriptRoot "Modulos_VBA"
+	$vbaDest = Join-Path $ProjectPath "Modulos\VBA"
+	
+    # Verificar que la carpeta fuente existe
+    if (-not (Test-Path $VBAModulesPath)) {
+        Write-Host "  ⚠ Carpeta de módulos VBA no encontrada: $VBAModulesPath" -ForegroundColor Yellow
+        Write-Host "  Se omitirá la importación de macros." -ForegroundColor Yellow
+        return $false
+    }
+    
+    # Crear carpeta de destino si no existe
+    if (-not (Test-Path $vbaDest)) {
+        New-Item -ItemType Directory -Path $vbaDest -Force | Out-Null
+        Write-Host "  ✓ Carpeta creada: $vbaDest" -ForegroundColor Green
+    }
+    
+    # Copiar archivos .bas, .frm, .frx
+	Write-Host "Copiando módulos VBA..." -ForegroundColor Cyan
+
+    $files = Get-ChildItem -Path $vbaSource -Include "*.bas", "*.frm", "*.frx" -Recurse
+    $copied = 0
+    foreach ($file in $files) {
+        $destFile = Join-Path $vbaDest $file.Name
+        Copy-Item -Path $file.FullName -Destination $destFile -Force
+        $copied++
+    }
+	Write-SystemLog "Módulos VBA copiados a $vbaDest" -Level "SUCCESS"
+    Write-Host "  ✓ Copiados $copied archivos de módulos VBA" -ForegroundColor Green
+	
+    Write-Host "Importando módulos VBA..." -ForegroundColor Cyan
+    try {
+        $vbaProject = $workbook.VBProject
+        
+        # Importar módulos .bas
+        $basFiles = Get-ChildItem -Path $vbaDest -Filter "*.bas"
+        foreach ($file in $basFiles) {
+            Write-Host "  Importando: $($file.Name)" -ForegroundColor Gray
+            $vbaProject.VBComponents.Import($file.FullName)
+        }
+        
+        # Importar formularios .frm (necesita .frx en el mismo directorio)
+        $frmFiles = Get-ChildItem -Path $vbaDest -Filter "*.frm"
+        foreach ($file in $frmFiles) {
+            Write-Host "  Importando formulario: $($file.Name)" -ForegroundColor Gray
+            $vbaProject.VBComponents.Import($file.FullName)
+        }
+		
+		Write-SystemLog "Módulos VBA importados correctamente" -Level "SUCCESS"
+        Write-Host "✓ Módulos VBA importados correctamente." -ForegroundColor Green
+    }
+    catch {
+        Write-Host "✗ Error al importar módulos VBA: $($_.Exception.Message)" -ForegroundColor Red
+		Write-Log "Error importando módulos VBA: $($_.Exception.Message)" -Level "ERROR"
+        return $false
+	}
+}
+
 function Add-FormulasAndValidations {
     param(
         [object]$Workbook
@@ -557,6 +632,14 @@ function Main {
         
         Pause-Script -Message "Tablas dinámicas creadas. Presiona una tecla para proteger hojas..."
         
+		# Agregar macros y formularios
+        Import-VBAModules -Excel $excel -Workbook $workbook
+        
+        Pause-Script -Message "Macros y formularios agregados. Presiona una tecla para crear tablas dinámicas..."
+
+		#Crear Formularios automaticamente
+		$excel.Run("CrearTodosLosFormularios")
+		
         # Guardar archivo - MODIFICADO: Guardar sin protección temporal
         Write-Host "`n[PASO 6/7] Guardando archivo Excel..." -ForegroundColor Cyan
         Pause-Script -Message "Guardando archivo. Esto puede tardar unos segundos..."

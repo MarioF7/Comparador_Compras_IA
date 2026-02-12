@@ -1,0 +1,133 @@
+Attribute VB_Name = "modConfiguracion"
+Option Explicit
+
+' =============================================
+' CONFIGURACIÓN GLOBAL DEL SISTEMA
+' =============================================
+
+Public Const APP_VERSION As String = "3.5.0"
+Public Const APP_NAME As String = "Comparador de Compras IA"
+
+' Nombres de hojas
+Public Const SHEET_USUARIOS As String = "USUARIOS"
+Public Const SHEET_PRODUCTOS As String = "PRODUCTOS"
+Public Const SHEET_TIENDAS As String = "TIENDAS"
+Public Const SHEET_PRECIOS As String = "PRECIOS"
+Public Const SHEET_COMPARATIVA As String = "COMPARATIVA"
+Public Const SHEET_HISTORIAL As String = "HISTORIAL_COMPRAS"
+Public Const SHEET_PREFERENCIAS As String = "PREFERENCIAS_IA"
+Public Const SHEET_DASHBOARD As String = "DASHBOARD"
+
+' Pesos por defecto para el algoritmo (0-1)
+Public Const DEFAULT_WEIGHT_PRICE As Double = 0.5
+Public Const DEFAULT_WEIGHT_DISTANCE As Double = 0.3
+Public Const DEFAULT_WEIGHT_RATING As Double = 0.2
+
+' Colores personalizados (RGB)
+Public Const COLOR_SUCCESS As Long = 5287936   ' Verde oscuro
+Public Const COLOR_WARNING As Long = 65535      ' Amarillo
+Public Const COLOR_ERROR As Long = 255          ' Rojo
+Public Const COLOR_HIGHLIGHT As Long = 15773696 ' Azul claro
+
+' Tipos de transporte
+Public Enum TransportType
+    Coche = 1
+    TransportePublico = 2
+    Andando = 3
+    Bicicleta = 4
+End Enum
+
+' Prefijos para IDs automáticos
+Public Const ID_PREFIX_PRODUCTO As String = "PROD"
+Public Const ID_PREFIX_TIENDA As String = "TND"
+Public Const ID_PREFIX_PRECIO As String = "PRC"
+Public Const ID_PREFIX_COMPARATIVA As String = "CMP"
+
+' Rutas relativas del proyecto (se completan al abrir)
+Public g_strRutaProyecto As String
+Public g_strRutaBackup As String
+Public g_strRutaReportes As String
+
+' =============================================
+' INICIALIZACIÓN AL ABRIR EL LIBRO
+' =============================================
+Sub InicializarSistema()
+    ' Establece rutas dinámicas
+    g_strRutaProyecto = ThisWorkbook.Path
+    g_strRutaBackup = g_strRutaProyecto & "\Data_Backup\Automatico\"
+    g_strRutaReportes = g_strRutaProyecto & "\Reportes\"
+    
+    ' Crea menú personalizado si no existe
+    Call CrearMenuPersonalizado
+    
+    ' Verifica que existan las hojas críticas
+    Call VerificarHojas
+End Sub
+
+Private Sub CrearMenuPersonalizado()
+    On Error Resume Next
+    ' Eliminar menú anterior si existe
+    Application.CommandBars("Comparador IA").Delete
+    On Error GoTo 0
+    
+    ' Crear nuevo menú
+    Dim menuBar As CommandBar
+    Set menuBar = Application.CommandBars.Add(Name:="Comparador IA", _
+                                              Position:=msoBarTop, _
+                                              Temporary:=True)
+    menuBar.Visible = True
+    
+    ' Botón: Alta de Producto
+    With menuBar.Controls.Add(Type:=msoControlButton)
+        .Caption = "Alta Producto"
+        .FaceId = 160
+        .OnAction = "frmAltaProducto.Show"
+        .TooltipText = "Añadir nuevo producto"
+    End With
+    
+    ' Botón: Alta Tienda
+    With menuBar.Controls.Add(Type:=msoControlButton)
+        .Caption = "Alta Tienda"
+        .FaceId = 161
+        .OnAction = "frmAltaTienda.Show"
+        .TooltipText = "Añadir nueva tienda"
+    End With
+    
+    ' Botón: Alta Precio
+    With menuBar.Controls.Add(Type:=msoControlButton)
+        .Caption = "Alta Precio"
+        .FaceId = 162
+        .OnAction = "frmAltaPrecio.Show"
+        .TooltipText = "Registrar precio de producto en tienda"
+    End With
+    
+    ' Separador
+    menuBar.Controls.Add Type:=msoControlSeparator
+    
+    ' Botón: Comparar
+    With menuBar.Controls.Add(Type:=msoControlButton)
+        .Caption = "Comparar Precios"
+        .FaceId = 163
+        .OnAction = "frmComparar.Show"
+        .TooltipText = "Comparar productos entre tiendas"
+    End With
+    
+    ' Botón: Dashboard
+    With menuBar.Controls.Add(Type:=msoControlButton)
+        .Caption = "Dashboard"
+        .FaceId = 164
+        .OnAction = "MostrarDashboard"
+        .TooltipText = "Ver panel de control"
+    End With
+End Sub
+
+Private Sub VerificarHojas()
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = SHEET_DASHBOARD Then Exit Sub
+    Next ws
+    ' Si no existe, crear hoja DASHBOARD
+    Sheets.Add After:=Sheets(Sheets.Count)
+    ActiveSheet.Name = SHEET_DASHBOARD
+    Call InicializarDashboard
+End Sub

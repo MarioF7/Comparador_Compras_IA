@@ -1,10 +1,10 @@
 ﻿RESUMEN DE CONFIGURACIÓN DEL SISTEMA
 ====================================
-Fecha: 2026-02-09 11:44:33
+Fecha: 2026-02-10 10:21:01
 Versión: 3.5.0
 Usuario: Alba
 Equipo: LAPTOP-QL6HA0J3
-Ruta Proyecto: C:\Users\Alba\Desktop\Proyecto comparador IA\Scripts_Creacion\..\Comparador_Compras_IA
+Ruta Proyecto: C:\Users\Alba\Desktop\Proyecto comparador IA\tools\..\Comparador_Compras_IA
 
 ESTRUCTURA CREADA:
 -----------------

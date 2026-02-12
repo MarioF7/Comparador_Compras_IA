@@ -1,8 +1,8 @@
 LICENCIA DE USO - SISTEMA COMPARADOR DE COMPRAS IA
 ===================================================
 
-Versi�n del sistema: 3.5.0
-Fecha de instalaci�n: 09/02/2026 11:44:05,49
+Versi�n del sistema: 
+Fecha de instalaci�n: 
 Usuario licenciado: Alba
 Equipo: LAPTOP-QL6HA0J3
 
@@ -54,6 +54,6 @@ Para soporte t�cnico o preguntas sobre la licencia:
 � Contacte al desarrollador si es necesario.
 
 ===================================================
-� 2024 Sistema Comparador de Compras IA v3.5.0
+� 2024 Sistema Comparador de Compras IA v
 Todos los derechos reservados.
 ===================================================
